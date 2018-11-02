@@ -1,4 +1,4 @@
-#Core Monitoring Tool Kit
+# Core Monitoring Tool Kit
 1. [Overview](#overview)
 1. [Prerequisites](#prerequisites)
 1. [Deployment Steps](#deployment-steps)
@@ -9,15 +9,15 @@
 1. [Contributing](#contributing)
 
 
-##Overview
+## Overview
 The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics. The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
 
-##Prerequisites
+## Prerequisites
 - [AzureRm PowerShell Module installed](https://docs.microsoft.com/en-us/powershell/azure/install-azurerm-ps?view=azurermps-5.7.0)
 - Log Analytics workspace created
 - User running the toolkit will need Contributor role on the resource group and workspace
 
-##Deployment Steps
+## Deployment Steps
 1. Download the core monitoring toolkit contents to your local system
 1. Navigate to the script directory
 1. Run the PowerShell script, **New-CoreAlerts.ps1**, with desired parameters. Minimum suggested parameters shown in the example below.
@@ -88,7 +88,7 @@ The **Search** element contains the JSON payload required to create saved search
 
 The **Email** element contains the JSON payload required to create the alert and tie it to an action group.
 
-##Script Help
+## Script Help
 The New-CoreAlerts script supports PowerShell's Get-Help command. To get the most up-to-date information please run the following from within the script directory.
 
 ``` powershell
@@ -152,10 +152,10 @@ At the time of this writing:
 		KEYWORDS: OMS, Log Analytics, Alerts, Core Alerts, Log Alerts, Azure Monitor
 ```
 
-##References
+## References
 **Create and manage alert rules in Log Analytics with REST API**
 https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-api-alerts
 
 
-##Contributing
+## Contributing
  [Contribution guidelines for this project](docs/CONTRIBUTING.md)
