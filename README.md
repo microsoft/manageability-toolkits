@@ -42,7 +42,7 @@ The Core Monitoring Toolkit automates the deployment of an example set of log al
 
 ![Sample output with no parameters](/docs/images/sampleOutputNoParams.png)
 
-5. Lastly, the toolkit can use an existing action group.
+5. The toolkit can also use an existing action group.
 
 ``` powershell
 # Run core monitoring toolkit with an existing action group specified.
@@ -54,10 +54,22 @@ The Core Monitoring Toolkit automates the deployment of an example set of log al
 -ExistingActionGroupName '<Name of existing action group>'
 ```
 
+6. Lastly, the toolkit can also be used to deploy the alerts based on the alert types specified in the configuration file.
+
+``` powershell
+# Run core monitoring toolkit with an existing action group specified.
+.\New-CoreAlerts.ps1 `
+-SubscriptionID "<subscriptionId>" `
+-WorkspaceName "<Log Analytics Workspace Name>" `
+-ResourceGroup "<Log Analytics Workspace resource group name>" `
+-Location '<Location of workspace and resource group>' `
+-AlertTypes '<Required Alert Types like SQL,HP>'
+```
+
 **Sample Output:**
 ![Sample output with existing action group](/docs/images/sampleOutputExistingActionGroup.png)
 
-6. Once the script completes you will see the alerts in the Azure Portal -> Log Analytics-> Alerts
+7. Once the script completes you will see the alerts in the Azure Portal -> Log Analytics-> Alerts
 
 ![Alerts in Azure Portal](/docs/images/portalExample.png)
 
@@ -100,15 +112,13 @@ At the time of this writing:
 ```
 	.SYNOPSIS
 		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
-
 	.DESCRIPTION
 		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
 		The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
-
 	.Parameter SubscriptionID
 		Specifies the Azure Subscription ID for the workspace where the alerts will be created.
 	.Parameter WorkspaceName
-		Specifies the name for the workspace where the alerts will be created.
+		Specifies the name for the log analytics workspace where the alerts will be created.
 	.Parameter ResourceGroup
 		Specifies the resource group of the workspace where the alerts will be created.
 	.Parameter Location
@@ -121,35 +131,39 @@ At the time of this writing:
 		Specifies the email address that will be configured for the action group to be added to all alerts created by this toolkit.
 	.Parameter ExistingActionGroupName
 		Specifies the name of an existing action group to be added to all alerts created by this toolkit.
+	.Parameter AlertTypes
+		Specifies the type(s) of alerts to be deployed.
 	.Parameter ConfigPath
 		Specifies the path to the JSON file containing the alert configurations. Default is '.\DefaultAlertConfig.json'.
-
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US'
 	   
 	   This command will run the Core Monitoring Toolkit script with the provided parameters.
-
-
+	   
 	.EXAMPLE
 	   .\New-CoreAlerts.ps1
 	   
 	   This command will run the Core Monitoring Toolkit script and prompt the user for required parameters.
-
-
+	   
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -ExistingActionGroupName 'useractiongroupname' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' 
 	   
 	   This command will run the Core Monitoring Toolkit script with the provided parameters, adding the existing action group named 'useractiongroupname' to all alerts created by the toolkit.
+	   
+	.EXAMPLE
+		.\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' -AlertTypes "Core,SQL"
 
+		This command will run the Core Monitoring Toolkit script with the provided parameters, deploying only alerts that are tagged with 'Core' or 'SQL'
 		
 	.LINK
 	https://github.com/Microsoft/manageability-toolkits
-
+	
+	
 	.Notes
 		NAME:     New-CoreAlerts
 		AUTHOR(s): Arun Kumar Rajendra <arunkra@microsoft.com>, Matt Carlson <macarlso@microsoft.com>
-		LASTEDIT: 10/31/2018
-		KEYWORDS: OMS, Log Analytics, Alerts, Core Alerts, Log Alerts, Azure Monitor
+		LASTEDIT: 02/04/2019
+		KEYWORDS: OMS, Log Analytics, Alerts, Core Alerts
 ```
 
 ## References
@@ -158,4 +172,4 @@ https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-api-alerts
 
 
 ## Contributing
- [Contribution guidelines for this project](docs/CONTRIBUTING.md)
+ [Contribution guidelines for this project](/docs/CONTRIBUTING.md)

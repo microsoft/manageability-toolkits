@@ -1,11 +1,9 @@
 ﻿<#
 	.SYNOPSIS
 		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
-
 	.DESCRIPTION
 		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
 		The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
-
 	.Parameter SubscriptionID
 		Specifies the Azure Subscription ID for the workspace where the alerts will be created.
 	.Parameter WorkspaceName
@@ -22,72 +20,115 @@
 		Specifies the email address that will be configured for the action group to be added to all alerts created by this toolkit.
 	.Parameter ExistingActionGroupName
 		Specifies the name of an existing action group to be added to all alerts created by this toolkit.
+	.Parameter AlertTypes
+		Specifies the type(s) of alerts to be deployed.
 	.Parameter ConfigPath
 		Specifies the path to the JSON file containing the alert configurations. Default is '.\DefaultAlertConfig.json'.
-
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US'
 	   
 	   This command will run the Core Monitoring Toolkit script with the provided parameters.
-
-
+	   
 	.EXAMPLE
 	   .\New-CoreAlerts.ps1
 	   
 	   This command will run the Core Monitoring Toolkit script and prompt the user for required parameters.
-
-
+	   
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -ExistingActionGroupName 'useractiongroupname' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' 
 	   
 	   This command will run the Core Monitoring Toolkit script with the provided parameters, adding the existing action group named 'useractiongroupname' to all alerts created by the toolkit.
+	   
+	.EXAMPLE
+		.\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' -AlertTypes "Core,SQL"
 
+		This command will run the Core Monitoring Toolkit script with the provided parameters, deploying only alerts that are tagged with 'Core' or 'SQL'
 		
 	.LINK
 	https://github.com/Microsoft/manageability-toolkits
-
+	
+	
 	.Notes
 		NAME:     New-CoreAlerts
 		AUTHOR(s): Arun Kumar Rajendra <arunkra@microsoft.com>, Matt Carlson <macarlso@microsoft.com>
-		LASTEDIT: 10/31/2018
-		KEYWORDS: OMS, Log Analytics, Alerts, Core Alerts, Log Alerts, Azure Monitor
+		LASTEDIT: 02/04/2019
+		KEYWORDS: OMS, Log Analytics, Alerts, Core Alerts
 #>
-
 
 # TODO: Add parameter sets for action group parameters
 param (
 	[Parameter(Mandatory=$true)]
 	[string]$SubscriptionId,
-	
+
 	[Parameter(Mandatory=$true)]
 	[string]$WorkspaceName,
-	
+
 	[Parameter(Mandatory=$true)]
 	[string]$ResourceGroup,
-	
+
 	[Parameter(Mandatory=$true)]
 	[string]$Location,
-	
+
 	[Parameter(Mandatory=$false)]
 	[string]$NewActionGroupName,
-	
+
 	[Parameter(Mandatory=$false)]
 	[string]$ActionGroupShortName = "CoreAlert",
-	
+
 	[Parameter(Mandatory=$false)]
 	[string]$ExistingActionGroupName,
-	
+
 	[Parameter(Mandatory=$false)]
 	[string]$AlertEmailAddress,
-	
+
+	[Parameter(Mandatory = $false)]
+	[string[]]$AlertTypes = @("All"),
+
 	[Parameter(Mandatory=$false)]
 	[string]$ConfigPath = ".\DefaultAlertConfig.json"
 )
 
+# Taken from https://gallery.technet.microsoft.com/scriptcenter/Easily-obtain-AccessToken-3ba6e593
+function Get-AzureRmCachedAccessToken()
+{
+    $ErrorActionPreference = 'Stop'
+  
+    if(-not (Get-Module AzureRm.Profile)) {
+        Import-Module AzureRm.Profile
+    }
+    $azureRmProfileModuleVersion = (Get-Module AzureRm.Profile).Version
+    # refactoring performed in AzureRm.Profile v3.0 or later
+    if($azureRmProfileModuleVersion.Major -ge 3) {
+        $azureRmProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
+        if(-not $azureRmProfile.Accounts.Count) {
+            Write-Error "Ensure you have logged in before calling this function."    
+        }
+    } else {
+        # AzureRm.Profile < v3.0
+        $azureRmProfile = [Microsoft.WindowsAzure.Commands.Common.AzureRmProfileProvider]::Instance.Profile
+        if(-not $azureRmProfile.Context.Account.Count) {
+            Write-Error "Ensure you have logged in before calling this function."    
+        }
+    }
+  
+    $currentAzureContext = Get-AzureRmContext
+    $profileClient = New-Object Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient($azureRmProfile)
+    Write-Debug ("Getting access token for tenant" + $currentAzureContext.Subscription.TenantId)
+    $token = $profileClient.AcquireAccessToken($currentAzureContext.Subscription.TenantId)
+    $token.AccessToken
+}
+
+# Taken from https://gallery.technet.microsoft.com/scriptcenter/Easily-obtain-AccessToken-3ba6e593
+function Get-AzureRmBearerToken()
+{
+    $ErrorActionPreference = 'Stop'
+    ('Bearer {0}' -f (Get-AzureRmCachedAccessToken))
+}
 
 # Create a new action group
 function New-ActionGroup
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
@@ -95,55 +136,138 @@ function New-ActionGroup
 
 		[Parameter(Mandatory=$true)]
 		[string]$ResourceGroup,
-	
+
 		[Parameter(Mandatory=$true)]
 		[string]$AlertEmailAddress,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$ActionGroupName,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$ActionGroupShortName
 	)
-	
+
 	try
 	{
-		<#
-		Extract the user name from the email address and build the email action name from it.
-		e.g.
-		If Email = emailaction@microsoft.com
-		$emailActionName = "email-emailaction"
-		#>
-
+		# Extract the user name from the email address and build the email action name from it.
 		$emailUser = $AlertEmailAddress.Split("@")[0]
 		$emailActionName = "email-$emailUser"
-		
+
 		Write-Verbose "Variable AlertEmailAddress = $AlertEmailAddress"
 		Write-Verbose "Variable emailUser = $emailUser"
 		Write-Verbose "Variable emailActionName = $emailActionName"
-		
-		# Create the resource ID and properties to use when creating the action group using New-AzureRmResource cmdlet.
+
 		$ResourceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/microsoft.insights/actionGroups/$ActionGroupName"
 		$GroupProperties = [PSCustomObject]@{
 			groupShortName = $ActionGroupShortName
 			enabled = $true
-			emailReceivers = @([pscustomobject]@{name = $emailActionName;emailAddress = $AlertEmailAddress})	
+			emailReceivers = @([pscustomobject]@{name = $emailActionName;emailAddress = $AlertEmailAddress})
 		}
 
-		# Create the action group
 		New-AzureRmResource -Location "Global" -ResourceId $ResourceId -Properties $GroupProperties -ApiVersion "2017-04-01" -Force
 	}
-	catch 
-	{ 
+	catch
+	{
 		$ErrorMessage = $_.Exception.Message
-		Write-Error "Error occurred while creating action groups: $ErrorMessage"
-		Exit 1
+		"Error occurred while creating action groups: $ErrorMessage"
+		exit
 	}
+}
+
+# Check for the valid alert types. A valid alert type is defined as any alert type listed as a tag in the alert config file.
+# This function will first determine the unique alert types present across all alerts in the alert config file. This is then
+# compared with the alert types provided as an input parameter. If all inputted alert types exist in the config file, the
+# function will return true. Even even one non-valid alert is provided as input, the function will return false.
+function Get-ValidAlertType
+{
+	[CmdletBinding()]
+	param
+	(
+		[Parameter(Mandatory = $true)]
+		[PsCustomObject]$AlertTypes,
+
+		[Parameter(Mandatory = $true)]
+		[PsCustomObject]$AlertConfig
+	)
+
+	# If alert types contains all, we can stop checking and return true since the result is that all alerts will be deployed.
+	if (($AlertTypes -join ",").ToLower().Contains("all"))
+	{
+		return $true
+	}
+
+	# Get all unique tag strings in the alert config file
+	$tags = $AlertConfig.Alerts.Tags | Sort-Object | Get-Unique
+	$uniquetag = @()
+
+	# Since there can be more than one tag separated by a comma in the tag string, we need to split it out to a tag per array index.
+	foreach ($tag in $tags)
+	{
+		$uniquetag += $tag.Split(",")
+	}
+
+	# Turn the array of individual tags into a unique array of tags
+	$uniquetags = $uniquetag | Sort-Object | Get-Unique
+
+	# Alert types can come in a comma separated list of tags in a single string. Split the alert types into an alert type per array index.
+	$types = $AlertTypes.Split(",")
+
+	# For each of the alert types provided by the input parameter, check to verify that it's a valid alert type that exists in the config file.
+	foreach ($type in $types)
+	{
+		# If the current alert type is not in the list of valid alert types, stop evaluating and return false.
+		if ($type -NotIn ($uniquetags))
+		{
+			Write-Host "Alert Type : $types is not a valid alert type, allowed alert types are : $($uniquetags -join ', ')"
+			return $false
+		}
+	}
+
+	# If we make it here, all inputted alert types are known to be valid
+	return $true
+}
+
+# This function will return all alerts from the config file that match the requested alert types. i.e. all alerts that where the tag contains one of the requested alert types.
+function Get-Alerts
+{
+	param (
+	[Parameter(Mandatory=$true)]
+	[string[]]$AlertTypes = @("All"),
+	
+	[Parameter(Mandatory = $true)]
+	[PsCustomObject]$AlertConfig
+	)
+
+	$alerts = @()
+	$tempAlerts = @()
+
+	# If All alert types are selected then all alerts are added to the alert list to return. Else, add only requested alert types.
+	if ($AlertTypes.ToLower().Contains("all"))
+	{
+		$alerts += $AlertConfig.Alerts
+	}
+	else
+	{
+		# Since alert types can contain a comma separated list of alert types, split it into an array.
+		$alertTypesSplit = $AlertTypes.Split(",")
+
+		# For each alert type add any alert where the tag contains the alert type to the temporary array.
+		foreach ($alertType in $alertTypesSplit)
+		{
+			$tempAlerts += $AlertConfig.Alerts | Where-Object {$_.Tags.ToLower().Contains($alertType.ToLower())}
+		}
+		
+		# Since an alert can contain more than one alert type tag, we may have duplicate alerts in our list. This will reduce the alert list to only unique alerts.
+		$alerts = $tempAlerts | Sort-Object AlertName | Get-Unique -AsString
+	}
+
+	return $alerts
 }
 
 # Create a new saved search
 function New-AlertSavedSearch
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
@@ -160,33 +284,32 @@ function New-AlertSavedSearch
 
 		[Parameter(Mandatory=$true)]
 		[string]$SavedSearchId,
-		
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$Properties
 	)
-	
+
 	Write-Verbose "Creating new alert saved search"
 	try
 	{
-		# Create the resource ID to use when creating the saved search using New-AzureRmResource cmdlet.
 		$ResourceId = "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/"
 		Write-Verbose "ResourceId: $ResourceId"
 		Write-Verbose "Saved Search Query: $($Properties.Query)"
 
-		# Create the saved search
 		New-AzureRmResource -ResourceId $ResourceId -Properties $Properties -ApiVersion "2017-03-15-preview" -Force
 	}
 	catch
 	{
 		$ErrorMessage = $_.Exception.Message
 		Write-Error "Error occurred while creating Saved searches: $ErrorMessage"
-		Exit 1 
+		Exit 1
 	}
 }
 
 # Create a new schedule for the saved search
 function New-AlertSchedule
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
@@ -203,49 +326,30 @@ function New-AlertSchedule
 
 		[Parameter(Mandatory=$true)]
 		[string]$SavedSearchId,
-		
-		[Parameter(Mandatory=$true)]
-		$BearerToken,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$ScheduleId,
-		
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$Properties
 	)
-	
+
 	Write-Verbose "Creating new alert schedule"
 	try
 	{
 		# Get json in the format of "{'properties': { 'Interval': 10, 'QueryTimeSpan':10, 'Active':'true' }"
 		$scheduleJson = [PSCustomObject]@{properties = $Properties} | ConvertTo-Json
-		
-		# Build the header for the API call
+
 		$header = @{
 			'Content-Type'='application\json'
-			'Authorization'= $BearerToken
+			'Authorization'= Get-AzureRmBearerToken
 		}
-		
-		# Build the URI for the API call
+
 		$uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/schedules/$($ScheduleId)?api-version=$($Apiversion)"
 		Write-Verbose "URI: $uri"
 		Write-Verbose "Json payload: $scheduleJson"
-		
-		# Create the alert schedule
-		Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $scheduleJson -ContentType "application/json"
-		
-		<#
-			#Used only for New-AzureRmResource method which works, but is currently not supported.
-			$ResourceId = "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/schedules/$ScheduleId/"
-			$scheduleProperties = [PSCustomObject]@{
-				Interval = 10
-				QueryTimeSpan = 10
-				Active = "true"
-			}
 
-			# Using the API directly for now since nested resources is not supposed to work with this command. This does work though so we re-enable at a later date 
-			New-AzureRmResource -ResourceId $ResourceId -Properties $scheduleProperties -ApiVersion $Apiversion -Force
-		#>
+		Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $scheduleJson -ContentType "application/json"
 	}
 	catch
 	{
@@ -258,6 +362,7 @@ function New-AlertSchedule
 # Create a new action for a schedule, completing the alert configuration
 function New-AzureAlert
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
@@ -265,7 +370,7 @@ function New-AzureAlert
 
 		[Parameter(Mandatory=$true)]
 		[string]$ResourceGroup,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$ActionResourceGroup,
 
@@ -283,62 +388,51 @@ function New-AzureAlert
 
 		[Parameter(Mandatory=$true)]
 		[string]$AlertId,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$ActionGroupName,
-		
-		[Parameter(Mandatory=$true)]
-		$BearerToken,
-		
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$Properties
 	)
-	
-	Write-Verbose "Creating new alert"
 
-	# Build the header for the API call
+	Write-Verbose "Creating new alert"
 	$header = @{
 		'Content-Type'='application\json'
-		'Authorization'= $BearerToken
+		'Authorization'= Get-AzureRmBearerToken
 	}
-	
-	# Build the URI for the API call
+
 	$uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/schedules/$ScheduleId/actions/$($AlertId)?api-version=$($Apiversion)"
-	
+
 	# Depth parameter must be large enough so that arrays deeper into the JSON aren't converted to a single line of text.
 	$alertsJson = [PSCustomObject]@{properties = $Properties} | ConvertTo-Json -Depth 5
-
-	# Replace with actual action group, subscription and resource group names.
 	$alertsJson = $alertsJson.Replace("samplecoreactiongroup", $ActionGroupName)
 	$alertsJson = $alertsJson.Replace("subscrname", $SubscriptionId)
 	$alertsJson = $alertsJson.Replace("resourcegrp", $ActionResourceGroup)
-	
+
 	Write-Verbose "URI: $uri"
 	Write-Verbose "Json payload: $alertsJson"
-	
-	# Create the alert
+
 	Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $alertsJson -ContentType "application/json"
 }
 
 function Update-WorkspaceEventCollection
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
 		[string]$ResourceGroup,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$WorkspaceName,
-		
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$EventLogConfig
 	)
-	# Configure log analytics workspace with specified event log collections
-
-
 	Write-Verbose "Entering function: 'Update-WorkspaceEventCollection'"
 	Write-Verbose "Resource Group Name: '$ResourceGroup'"
-	
+
 	Write-Verbose "Getting current windows event collection configuration from workspace"
 	$CurrentWindowsEventConfig = Get-AzureRmOperationalInsightsDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Kind WindowsEvent | Select-Object `
 		Name, `
@@ -346,15 +440,14 @@ function Update-WorkspaceEventCollection
 		@{n='CollectErrors'; e={$_.Properties.EventTypes.EventType -contains 'Error' }}, `
 		@{n='CollectWarnings'; e={$_.Properties.EventTypes.EventType -contains 'Warning' }}, `
 		@{n='CollectInformation'; e={$_.Properties.EventTypes.EventType -contains 'Information' }}
-	
-	#
+
 	Write-Verbose "Looping through events from even log configuration"
 	foreach ( $EventLogItem in $EventLogConfig )
 	{
 		Write-Verbose "Processing event '$($EventLogItem.EventLogName)'"
 
-		# Create a hashtable to track whether Error, Warning or Information event types should be collected for this event log
 		$EventArgs = @{}
+
 		$EventArgs.Add('EventLogName', $EventLogItem.EventLogName)
 
 		if ( $EventLogItem.Error )
@@ -370,19 +463,16 @@ function Update-WorkspaceEventCollection
 			$EventArgs.Add('CollectInformation', $null)
 		}
 
-		# Get configuration if this event log is already configured in the log analytics workspace
 		$ThisEvent = $CurrentWindowsEventConfig | Where-Object { $_.EventLogName -eq $EventLogItem.EventLogName }
 
-		# Enable the event log collection if it is not already configured.
 		if ( -not $ThisEvent )
 		{
 			Write-Verbose "Event log not configured";
 
-			# Build the name in the format log analytics expects
 			$NewDataSourceName = "DataSource_WindowsEvent_$(  (New-Guid).ToString() )"
+
 			Write-Verbose $NewDataSourceName
 
-			# Configure the event in the specified workspace
 			New-AzureRmOperationalInsightsWindowsEventDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Name $NewDataSourceName @EventArgs | Out-Null
 		}
 		else
@@ -390,23 +480,21 @@ function Update-WorkspaceEventCollection
 			Write-Verbose "Event log collection already configured"
 		}
 	}
-	
+
 	Write-Verbose "Exiting function: 'Update-WorkspaceEventCollection'"
 }
 
 function Update-WorkspacePerfCollection
 {
+	[CmdletBinding()]
 	param
 	(
 		[Parameter(Mandatory=$true)]
 		$Workspace,
-		
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$PerfCollectionConfig
 	)
-	# Configure log analytics workspace with specified performance counter collections
-
-
 	Write-Verbose "Entering function: 'Update-WorkspacePerfCollection'"
 
 	Write-Verbose "Getting current windows event collection configuration from workspace"
@@ -417,32 +505,28 @@ function Update-WorkspacePerfCollection
 		@{n='IntervalSeconds'; e={$_.Properties.IntervalSeconds }}, `
 		@{n='CounterName'; e={$_.Properties.CounterName }}, `
 		@{n='CollectorType'; e={$_.Properties.CollectorType }}
-	
+
 	Write-Verbose "Looping through events from even log configuration"
 	foreach ( $PerfCollectionItem in $PerfCollectionConfig )
 	{
 		Write-Verbose "Processing performance collector '$($PerfCollectionItem.ObjectName)($($PerfCollectionItem.InstanceName))\$($PerfCollectionItem.CounterName)'"
 
-		# Create a hashtable to track the ObjectName, InstanceName, IntervalSeconds and CounterName values
 		$EventArgs = @{}
 		$EventArgs.Add('ObjectName', $PerfCollectionItem.ObjectName)
 		$EventArgs.Add('InstanceName', $PerfCollectionItem.InstanceName)
 		$EventArgs.Add('IntervalSeconds', $PerfCollectionItem.IntervalSeconds)
 		$EventArgs.Add('CounterName', $PerfCollectionItem.CounterName)
 
-		# Get configuration if this performance counter is already configured in the log analytics workspace
 		$ThisPerfCollector = $CurrentWindowsPerfConfig | Where-Object {  ($_.ObjectName -eq $PerfCollectionItem.ObjectName ) -and  ($_.CounterName -eq $PerfCollectionItem.CounterName ) -and ($_.CounterName -eq $PerfCollectionItem.CounterName ) }
 
-		# Enable the performance counter collection if it is not already configured.
 		if ( -not $ThisPerfCollector )
 		{
 			Write-Verbose "Perf collector not configured";
 
-			# Build the name in the format log analytics expects
 			$NewDataSourceName = "DataSource_PerfCounter_$(  (New-Guid).ToString() )"
+
 			Write-Verbose $NewDataSourceName
 
-			# Configure the event in the specified workspace
 			New-AzureRmOperationalInsightsWindowsPerformanceCounterDataSource -Workspace $Workspace -Name $NewDataSourceName @EventArgs | Out-Null
 		}
 		else
@@ -450,110 +534,11 @@ function Update-WorkspacePerfCollection
 			Write-Verbose "Perf counter collection already configured"
 		}
 	}
-	
+
 	Write-Verbose "Exiting function: 'Update-WorkspacePerfCollection'"
 }
 
-function Login
-{
-	# Attempt to login to Azure
-    $needLogin = $true
-    Try 
-    {
-        $content = Get-AzureRmContext
-        if ($content) 
-        {
-			# Verify there is an active session
-            $needLogin = ([string]::IsNullOrEmpty($content.Account))
-        } 
-    } 
-    Catch 
-    {
-        if ($_ -like "*Login-AzureRmAccount to login*") 
-        {
-            $needLogin = $true
-        } 
-        else 
-        {
-            throw
-        }
-    }
-
-    if ($needLogin)
-    {
-		# Perform the login if needed
-        Login-AzureRmAccount
-    }
-}
-
-
-function Get-AzureRmCachedAccessToken
-{
-    # Function found here undet MIT license
-    # https://gallery.technet.microsoft.com/scriptcenter/Easily-obtain-AccessToken-3ba6e593
-    $ErrorActionPreference = 'Stop'
-  
-	if (-not (Get-Module AzureRm.Profile))
-	{
-        Import-Module AzureRm.Profile
-    }
-    $azureRmProfileModuleVersion = (Get-Module AzureRm.Profile).Version
-    # refactoring performed in AzureRm.Profile v3.0 or later
-	if ($azureRmProfileModuleVersion.Major -ge 3)
-	{
-        $azureRmProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
-		if (-not $azureRmProfile.Accounts.Count)
-		{
-            Write-Error "Ensure you have logged in before calling this function."    
-        }
-    }
-	else
-	{
-        # AzureRm.Profile < v3.0
-        $azureRmProfile = [Microsoft.WindowsAzure.Commands.Common.AzureRmProfileProvider]::Instance.Profile
-		if (-not $azureRmProfile.Context.Account.Count)
-		{
-            Write-Error "Ensure you have logged in before calling this function."    
-        }
-    }
-  
-    $currentAzureContext = Get-AzureRmContext
-    $profileClient = New-Object Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient($azureRmProfile)
-    Write-Debug ("Getting access token for tenant" + $currentAzureContext.Subscription.TenantId)
-    $token = $profileClient.AcquireAccessToken($currentAzureContext.Subscription.TenantId)
-	
-	return $token.AccessToken
-}
-
-function Get-BearerToken
-{
-	# Format the bearer token for use in header for API call.
-	$context = Get-AzureRmContext
-	$tokenCache = $context.TokenCache
-	$tenantId = $context.Tenant
-	$cachedTokens = $tokenCache.ReadItems() `
-        | Where-Object { $_.TenantId -eq $tenantId } `
-		| Sort-Object -Property ExpiresOn -Descending
-	$accessToken = $cachedTokens[0]
-	$bearerToken = "Bearer " + $accessToken.AccessToken
-	$bearerToken = ('Bearer {0}' -f (Get-AzureRmCachedAccessToken))
-
-	return $bearerToken
-}
-
 Write-Host
-
-# Attempt to obtain auth token for Azure API calls
-try
-{
-	Login
-	$token = Get-BearerToken
-}
-catch
-{
-	Write-Error "There was an error logging into Azure and creating an authentication token. $($_.Exception.Message)"
-	Exit 1
-}
 
 # Verify the ConfigPath parameter contains the path to an actual file.
 if (Test-Path $ConfigPath)
@@ -568,20 +553,30 @@ else
 
 
 # Make sure there are no spaces in action group short name. Need to figure out how to pass spaces in API call.
-# The call fails with spaces, but GUI will allow creation with spaces.
+# The call fails with spaces,but GUI will allow creation with spaces.
 if ($ActionGroupShortName.Contains(" "))
 {
 	Write-Error "Parameter ActionGroupShortName cannot contain spaces"
 }
 
-# Select subscription
+# Use token to login to Azure PowerShell Cmdlets
 try
 {
+	Write-Host "Logging into Azure and selecting subscription..."
+	if ([string]::IsNullOrEmpty($(Get-AzureRmContext).Account))
+	{
+		Login-AzureRmAccount
+	}
+	else
+	{
+		Write-Host "Existing AzureRM session detected. Skipping login prompt."
+	}
+
 	Select-AzureRmSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
 }
 catch
 {
-	Write-Error "Failed to select subscription with error $($_.Exception.Message)"
+	Write-Error "Failed to login to Azure subscription with error $($_.Exception.Message)"
 	Exit 1
 }
 
@@ -630,6 +625,13 @@ if (!$AlertEmailAddress -and !$ExistingActionGroupName)
 # Retrieve core monitoring config data from configuration file and convert from JSON to PowerShell object
 $alertConfig = (Get-Content $ConfigPath) | ConvertFrom-Json
 
+# Error if the alert type specified is not valid.
+$isAlertTypeValid = Get-ValidAlertType -AlertTypes $AlertTypes -AlertConfig $alertConfig
+if ($isAlertTypeValid -eq $false)
+{
+	Write-Error "Alert Type parameter passed is not valid. Exiting script."
+	Exit 1
+}
 
 # API Versions ** under review **
 $apiversion = $alertConfig.ApiVersion
@@ -652,8 +654,8 @@ if ($ExistingActionGroupName)
 {
 	Write-Verbose "User provided existing action group"
 	$type = "Microsoft.Insights/ActionGroups"
-	$actiongroupFindResult = Get-AzureRmResource -ResourceType $type -Name $ExistingActionGroupName
-	
+	$actiongroupFindResult = Find-AzureRmResource -ResourceType $type -ResourceNameEquals $ExistingActionGroupName
+
 	if ($actiongroupFindResult)
 	{
 		Write-Verbose "User provided action group found"
@@ -671,9 +673,8 @@ else
 	Write-Verbose "User did not provide existing action group using NewActionGroupName"
 	$ActionResourceGroup = $ResourceGroup
 	$ActionGroupName = $NewActionGroupName
-	
+
 	# Creates action group to be used for core monitoring alerts
-	#TODO: Add error checking
 	Write-Host "Creating action group..."
 	$actionGroupCreateResult = New-ActionGroup `
 		-SubscriptionID $SubscriptionID `
@@ -683,6 +684,7 @@ else
 		-ActionGroupShortName $ActionGroupShortName
 	Write-Host "Action group with name, '$NewActionGroupName' created successfully"
 }
+
 
 ##### Update event and perf collections
 Write-Host "Configuring event log collections..."
@@ -699,11 +701,13 @@ Update-WorkspacePerfCollection `
 ##### Begin creating alerts
 
 # Loop through alerts in config file and create all necessary components, including saved search, schedule and the alert.
+$alertlist = Get-Alerts -AlertTypes $AlertTypes -AlertConfig $alertConfig
 $alertProgressCount = 1
-$numAlerts = $alertConfig.Alerts.Count
+$numAlerts = $alertlist.Count
+Write-Host "Alerts where selected with the tags $($AlertTypes -join ', ') ..." 
 Write-Host "Beginning creation of $numAlerts alerts..."
-foreach ($alert in $alertConfig.Alerts){
-	
+foreach ($alert in $alertlist){
+
 	# If the alert from the config file has a GUID, use that. Otherwise generate one.
 	$alertGuid = $alert.AlertGuid
 	if (!$alertGuid)
@@ -711,10 +715,11 @@ foreach ($alert in $alertConfig.Alerts){
 		$alertGuid = [string]"$(New-Guid)"
 	}
 	Write-Verbose "AlertGuid: $alertGuid"
-	
+
 	$alertDisplayName = $alert.AlertName
-	
+
 	Write-Host " -Creating alert $alertProgressCount of $($numAlerts): '$alertDisplayName'"
+
 	
 	# Create Saved Searches to be used in Alert configurations
 	Write-Verbose "Creating Saved Searches..."
@@ -726,8 +731,8 @@ foreach ($alert in $alertConfig.Alerts){
 		-ApiVersion $apiversion `
 		-Properties $alert.SavedSearch
 	Write-Verbose "Saved Searches created successfully"
-	
-	# Create Schedules. 
+
+	# Create Schedules.
 	Write-Verbose "Creating Schedules..."
 	$scheduleResult = New-AlertSchedule `
 		-SubscriptionId $SubscriptionID `
@@ -735,11 +740,10 @@ foreach ($alert in $alertConfig.Alerts){
 		-WorkspaceName $WorkspaceName `
 		-SavedSearchId $alertGuid `
 		-ScheduleId $alertGuid `
-		-BearerToken $token `
 		-ApiVersion $apiversion `
 		-Properties $alert.Schedule
 	Write-Verbose "Schedules created successfully"
-	
+
 	# Create alert action
 	Write-Verbose "Creating alerts..."
 	$actionResult = New-AzureAlert `
@@ -752,10 +756,10 @@ foreach ($alert in $alertConfig.Alerts){
 		-AlertId $alertGuid `
 		-ActionGroupName $ActionGroupName `
 		-ApiVersion $apiversion `
-		-BearerToken $token `
 		-Properties $alert.AlertDefinition
 	Write-Verbose "Alerts created successfully.."
 	
+
 	$alertProgressCount++
 }
 Write-Host "Alert creation complete..."

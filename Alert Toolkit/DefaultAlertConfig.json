@@ -1,760 +1,1718 @@
 {
-	"ConfigFileVersion": "1.3",
-	"ApiVersion": "2015-03-20",
-	"Alerts": [
-		{
-			"AlertName": "High CPU Usage",
-			"AlertGuid": "8a9b0a3b-5f17-4a55-8132-0fe6dcbf968f",
-			"Tags": ["Core"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - High CPU Usage",
-				"Query": "let _maxValue = 85; let _timeWindow = 4h; let _AvgCpu = Perf | where TimeGenerated >= ago(_timeWindow) | where CounterName == \"% Processor Time\"      and InstanceName =~ \"_Total\"  | summarize mtgPerf=max(TimeGenerated), CounterValue=round(avg(CounterValue)), SampleCount=count(CounterValue) by Computer, InstanceName, CounterName, ObjectName; _AvgCpu | where CounterValue > _maxValue | project      Computer     , ObjectName     , CounterName     , InstanceName     , TimeGenerated=mtgPerf     , CounterValue     , AlertType_s = \"Sustained High CPU Utilization\"     , Severity = 4     , SeverityName_s = \"WARNING\"     , AffectedCI_s = strcat(Computer, \"/CPUPercent/\", InstanceName)     , AlertTitle_s = strcat(Computer, \": Sustained High CPU Utilization\")     , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nAverage CPU Utilization: \", CounterValue, \"%\\r\\nSample Period: Last \", _timeWindow, \"\\r\\nSample Count: \", SampleCount, \"\\r\\nAlert Threshold: > \", _maxValue, \"%\")",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 240,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "High CPU Usage",
-				"Description": "Triggers an alert for a high CPU usage condition",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - High CPU Usage"
-				}
-			}
-		},
-		{
-			"AlertName": "Low Disk Space Windows - Critical",
-			"AlertGuid": "844d2068-65ea-45d0-98d0-44e34a0548c6",
-			"Tags": ["Core"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - Low Disk Space Windows",
-				"Query": "let _minValue = 10; Perf | where TimeGenerated >= ago(1h) | where CounterValue <= _minValue | where CounterName == \"% Free Space\" and InstanceName in (\"C:\", \"E:\", \"F:\", \"G:\")  | summarize mtgPerf=max(TimeGenerated), CounterValue=max(CounterValue) by Computer, InstanceName, CounterName, ObjectName, DriveLetter=replace(@\"(\\w).\",@\"\\1\", InstanceName) | join kind=inner (     Heartbeat      | where OSType == \"Windows\"     | summarize max(TimeGenerated) by Computer     ) on Computer  | project      Computer     , ObjectName     , CounterName     , InstanceName     , TimeGenerated=mtgPerf     , round(CounterValue)     , DriveLetter     , AlertType_s = \"Windows Low Disk Space\"     , Severity = 3     , SeverityName_s = \"WARNING\"     , AffectedCI_s = strcat(Computer, \"/\", DriveLetter)     , AlertTitle_s = strcat(Computer, \": Low Disk Space on Drive \", DriveLetter)     , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nDrive Letter: \", DriveLetter, \"\\r\\nPercent Free Space: \", round(CounterValue), \"%\\r\\nAlert Threshold: <= \", _minValue, \"%\")",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 35,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "Low Disk Space Windows",
-				"Description": "Triggers an alert for a low disk space condition",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - Low Disk Space Windows"
-				}
-			}
-		},
-		{
-			"AlertName": "Low Memory",
-			"AlertGuid": "1fcf8156-fcca-45d2-be45-aca07b90aee8",
-			"Tags": ["Core"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - Low Memory",
-				"Query": "let _minAvailableMB = 1024;\nlet _sampleInterval = 4h;\nlet _linuxMem = Perf\n| where TimeGenerated >= ago(_sampleInterval)\n| where CounterName == \"Available MBytes Memory\"\n| summarize mtgPerf=max(TimeGenerated), CounterValue=avg(CounterValue), SampleCount=count(CounterValue) by Computer\n| join kind=inner\n(\n    Heartbeat\n    | where OSType == \"Linux\"\n    | summarize max(TimeGenerated) by Computer\n)\non Computer\n| project Computer, mtgPerf, AvailableMBytes=round(CounterValue), SampleCount;\nlet _windowsMem = Perf\n| where TimeGenerated >= ago(_sampleInterval)\n| where CounterName == \"Available MBytes\"\n//and ObjectName == \"Logical Disk\"\n\n//and InstanceName matches regex \"/.*\"\n| summarize mtgPerf=max(TimeGenerated), CounterValue=avg(CounterValue), SampleCount=count(CounterValue) by Computer\n| join kind=inner\n(\n    Heartbeat\n    | where OSType == \"Windows\"\n    | summarize max(TimeGenerated) by Computer\n)\non Computer\n| project Computer, mtgPerf, AvailableMBytes=round(CounterValue), SampleCount;\n_linuxMem\n| union _windowsMem\n| where AvailableMBytes < _minAvailableMB\n| project       Computer      , TimeGenerated=mtgPerf      , CounterValue=AvailableMBytes       , AlertType_s = \"Low Available Memory\"      , Severity = 4      , SeverityName_s = \"WARNING\"      , AffectedCI_s = strcat(Computer, \"/FreeMemoryMB/\")      , AlertTitle_s = strcat(Computer, \": Low Available Memory\")      , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nAverage Free Memory: \", AvailableMBytes, \" MB\\r\\nSample Period: Last \", _sampleInterval, \"\\r\\nSample Count: \", SampleCount, \"\\r\\nAlert Threshold: < \", _minAvailableMB, \" MB\")",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 240,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "Low Memory",
-				"Description": "Triggers an alert for a low memory condition",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - Low Memory"
-				}
-			}
-		},
-		{
-			"AlertName": "NTFS - File System Corrupt",
-			"AlertGuid": "bb8527b1-6152-4d28-be04-c3d81cf98407",
-			"Tags": ["Core"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - NTFS - File System Corrupt",
-				"Query": "Event | where EventLog == \"System\" and Source == \"DISK\" or Source == \"Ntfs\" and EventID == 55 | project Computer, TimeGenerated, AlertType_s = \"NTFS - File System Corrupt\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \": NTFS - File System Corrupt\"), AlertDetails_s = strcat(\"Event Description:\\r\\n\", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "NTFS - File System Corrupt",
-				"Description": "Core monitoring alert for monitoring disk",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - NTFS - File System Corrupt"
-				}
-			}
-		},
-		{
-			"AlertName": "Unexpected shutdown",
-			"AlertGuid": "39128bb3-9a64-4d81-bc36-58be5e101514",
-			"Tags": ["Core"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - Unexpected shutdown",
-				"Query": "Event | where EventLog == \"System\" and EventID == 6008 | project Computer, TimeGenerated, AlertType_s = \"Unexpected shutdown\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer), AlertTitle_s = strcat(Computer, \": Unexpected Shutdown\"), AlertDetails_s = strcat(\"Multiple shutdowns detected in the past 24 hours\\r\\nEventID: 6008\\r\\nEvent Description: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 1440,
-				"QueryTimeSpan": 1440,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "Unexpected shutdown",
-				"Version": "1",
-				"Description": "Unexpected shutdown monitoring from core monitoring",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 1
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - Unexpected shutdown"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Power sub system degraded or failed",
-			"AlertGuid": "c40aab23-0622-4648-9a67-6118858bdbd5",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Power sub system degraded or failed",
-				"Query": "Event | where EventLog == \"System\" | where EventID == 1103 or EventID == 1128 or EventID == 1126 or EventID == 1124 or EventID == 1125 or EventID == 1184 | where RenderedDescription contains \"System Information Agent: Health\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Power sub system degraded or failed\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Power sub system degraded or failed with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Power sub system degraded or failed",
-				"Description": "Power sub system degraded or failed. The fault tolerant power supply has degraded, failed or lost redundancy.",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Power sub system degraded or failed"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Fan degraded",
-			"AlertGuid": "804809b2-8cac-4d72-b186-ecd40f59ed95",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Fan degraded",
-				"Query": "Event | where EventLog == \"System\" | where Source == \"Server Agents\" | where EventID == 1131 or EventID == 1129 or EventID == 1086 | where RenderedDescription contains \"CPQHLTH.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Fan degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Fan degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Fan degraded",
-				"Description": "Fan degraded. A fault tolerant fan or system fan has been degraded.",
-				"Version": "1",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Fan degraded"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
-			"AlertGuid": "73032be3-1f4e-44a4-88be-ca25b797b1bc",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
-				"Query": "Event | where EventID == 1150 or EventID == 1151 | where RenderedDescription contains \"CPQRACK.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded with Event ID\", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
-				"Version": "1",
-				"Description": "Rack fans have failed.",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Drive Array Physical Drive degraded",
-			"AlertGuid": "eca68326-ebc4-490d-b33b-071af8380e81",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Drive Array Physical Drive degraded",
-				"Query": "Event | where EventID == 1202 or EventID == 1203 or EventID == 1216 | where RenderedDescription  contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Physical Drive degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Physical Drive degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Drive Array Physical Drive degraded",
-				"Version": "1",
-				"Description": "The drive array physical drive has degraded.",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Drive Array Physical Drive degraded"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
-			"AlertGuid": "372ffd1b-2a78-4ef4-b801-2c902bc8d3c1",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
-				"Query": "Event | where EventLog == \"System\" | where EventID == 1200 | where Source == \"Storage Agents\" | where RenderedDescription contains \"new status of 6\" and RenderedDescription contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID, \"/readyForRebuild\"), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild\"), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
-				"Version": "1",
-				"Description": "The drive array logical drive status has changed to 'readyForRebuild'",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert- HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Drive Array Logical Drive Status is failed",
-			"AlertGuid": "749aee97-1666-4635-8f88-38afd598e9b5",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is failed",
-				"Query": "Event | where EventLog == \"System\" | where EventID == 1200 | where Source == \"Storage Agents\" | where RenderedDescription contains \"new status of 3\" and RenderedDescription contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Logical Drive Status is failed\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID, \"/failed\"), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Logical Drive Status is failed\"), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Drive Array Logical Drive Status is failed",
-				"Version": "1",
-				"Description": "The drive array logical drive status has changed to 'failed'",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 0
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is failed"
-				}
-			}
-		},
-		{
-			"AlertName": "HP Windows (SNMP) Memory degraded",
-			"AlertGuid": "c1446d74-f632-49eb-b426-0e536386cfc6",
-			"Tags": ["Physical,HP"],
-			"SavedSearch": {
-				"Category": "Core",
-				"DisplayName": "Alert - HP Windows (SNMP) Memory degraded",
-				"Query": "Event | where EventLog == \"System\" | where Source == \"Server Agents\" | where EventID == 1025 or EventID == 1026 or EventID == 1027 or EventID == 1028 or EventID == 1031 or EventID == 1071 or EventID == 1035 or EventID == 1039 | where RenderedDescription  contains \"CPQHLTH.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Memory degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Memory degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
-				"Version": "1"
-			},
-			"Schedule": {
-				"Interval": 30,
-				"QueryTimeSpan": 30,
-				"Active": "true"
-			},
-			"AlertDefinition": {
-				"Name": "HP Windows (SNMP) Memory degraded",
-				"Version": "1",
-				"Description": "Memory degraded. Advanced Memory Protection has detected a memory fault.",
-				"Severity": "critical",
-				"Type": "Alert",
-				"Threshold": {
-					"Operator": "gt",
-					"Value": 1
-				},
-				"AzNsNotification": {
-					"GroupIds": ["/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"],
-					"CustomEmailSubject": "Alert - HP Windows (SNMP) Memory degraded"
-				}
-			}
-		}
-	],
-	"Events": [
-		{
-			"EventLogName":  "Application",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-ClusterAwareUpdating/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Desired State Configuration/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-FailoverClustering-CsvFs/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-FailoverClustering/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-GroupPolicy/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-Config/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-High-Availability/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-Integration/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-Shared-VHDX/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information":  false
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-SynthNic/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information":  false
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-VMMS/Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-VMMS/Networking",
-			"Error": true,
-			"Warning": true,
-			"Information":  false
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-VMMS/Storage",
-			"Error": true,
-			"Warning": true,
-			"Information":  false
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-Hyper-V-Worker-Admin",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-NetworkProfile/Operationa",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-SMBServer/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information":  false
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-TaskScheduler/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Microsoft-Windows-VHDMP/Operational",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "MSNIPAK",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Operations Manager",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "Setup",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		},
-		{
-			"EventLogName":  "System",
-			"Error": true,
-			"Warning": true,
-			"Information": true
-		}
-	],
-	"PerformanceCounters": [
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Read Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Read Latency",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Reads/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Write Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Write Latency",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Cluster CSV File System",
-			"CounterName":  "IO Writes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Hyper-V Dynamic Memory VM",
-			"CounterName":  "Guest Visible Physical Memory",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Hyper-V Dynamic Memory VM",
-			"CounterName":  "Physical Memory",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Hyper-V Hypervisor Logical Processor",
-			"CounterName":  "% Total Run Time",
-			"InstanceName":  "*",
-			"intervalSeconds":  60
-		},
-		{
-			"ObjectName":  "Hyper-V Hypervisor Virtual Processor",
-			"CounterName":  "% Total Run Time",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Hyper-V Virtual Storage Device",
-			"CounterName":  "Read Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Hyper-V Virtual Storage Device",
-			"CounterName":  "Read Operations/Sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Hyper-V Virtual Storage Device",
-			"CounterName":  "Write Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Hyper-V Virtual Storage Device",
-			"CounterName":  "Write Operations/Sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "% Free Space",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Avg. Disk sec/Read",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Avg. Disk sec/Transfer",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Avg. Disk sec/Write",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Current Disk Queue Length",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Read Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Reads/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Transfers/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Write Bytes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Disk Writes/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "LogicalDisk",
-			"CounterName":  "Free Megabytes",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Memory",
-			"CounterName":  "% Committed Bytes In Use",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Memory",
-			"CounterName":  "Available MBytes",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Memory",
-			"CounterName":  "Commit Limit",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Memory",
-			"CounterName":  "Committed Bytes",
-			"InstanceName":  "*",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Network Adapter",
-			"CounterName":  "Bytes Received/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Network Adapter",
-			"CounterName":  "Bytes Sent/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Network Interface",
-			"CounterName":  "Bytes Total/sec",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "NUMA Node Memory",
-			"CounterName":  "Available MBytes",
-			"InstanceName":  "_Total",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "NUMA Node Memory",
-			"CounterName":  "Total MBytes",
-			"InstanceName":  "_Total",
-			"intervalSeconds":  1800
-		},
-		{
-			"ObjectName":  "Processor",
-			"CounterName":  "% Processor Time",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "Processor",
-			"CounterName":  "% Processor Time",
-			"InstanceName":  "_Total",
-			"intervalSeconds":  60
-		},
-		{
-			"ObjectName":  "System",
-			"CounterName":  "Processor Queue Length",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		},
-		{
-			"ObjectName":  "TCPv4",
-			"CounterName":  "Connections Established",
-			"InstanceName":  "*",
-			"intervalSeconds":  300
-		}
-	]
+  "ConfigFileVersion": "1.3",
+  "ApiVersion": "2015-03-20",
+  "Alerts": [
+    {
+      "AlertName": "High CPU Usage",
+      "AlertGuid": "8a9b0a3b-5f17-4a55-8132-0fe6dcbf968f",
+      "Tags": [
+        "Core"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - High CPU Usage",
+        "Query": "let _maxValue = 85; let _timeWindow = 4h; let _AvgCpu = Perf | where TimeGenerated >= ago(_timeWindow) | where CounterName == \"% Processor Time\"      and InstanceName =~ \"_Total\"  | summarize mtgPerf=max(TimeGenerated), CounterValue=round(avg(CounterValue)), SampleCount=count(CounterValue) by Computer, InstanceName, CounterName, ObjectName; _AvgCpu | where CounterValue > _maxValue | project      Computer     , ObjectName     , CounterName     , InstanceName     , TimeGenerated=mtgPerf     , CounterValue     , AlertType_s = \"Sustained High CPU Utilization\"     , Severity = 4     , SeverityName_s = \"WARNING\"     , AffectedCI_s = strcat(Computer, \"/CPUPercent/\", InstanceName)     , AlertTitle_s = strcat(Computer, \": Sustained High CPU Utilization\")     , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nAverage CPU Utilization: \", CounterValue, \"%\\r\\nSample Period: Last \", _timeWindow, \"\\r\\nSample Count: \", SampleCount, \"\\r\\nAlert Threshold: > \", _maxValue, \"%\")",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "High CPU Usage",
+        "Description": "Triggers an alert for a high CPU usage condition",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - High CPU Usage"
+        }
+      }
+    },
+    {
+      "AlertName": "Low Disk Space Windows - Critical",
+      "AlertGuid": "844d2068-65ea-45d0-98d0-44e34a0548c6",
+      "Tags": [
+        "Core"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Low Disk Space Windows",
+        "Query": "let _minValue = 10; Perf | where TimeGenerated >= ago(1h) | where CounterValue <= _minValue | where CounterName == \"% Free Space\" and InstanceName in (\"C:\", \"E:\", \"F:\", \"G:\")  | summarize mtgPerf=max(TimeGenerated), CounterValue=max(CounterValue) by Computer, InstanceName, CounterName, ObjectName, DriveLetter=replace(@\"(\\w).\",@\"\\1\", InstanceName) | join kind=inner (     Heartbeat      | where OSType == \"Windows\"     | summarize max(TimeGenerated) by Computer     ) on Computer  | project      Computer     , ObjectName     , CounterName     , InstanceName     , TimeGenerated=mtgPerf     , round(CounterValue)     , DriveLetter     , AlertType_s = \"Windows Low Disk Space\"     , Severity = 3     , SeverityName_s = \"WARNING\"     , AffectedCI_s = strcat(Computer, \"/\", DriveLetter)     , AlertTitle_s = strcat(Computer, \": Low Disk Space on Drive \", DriveLetter)     , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nDrive Letter: \", DriveLetter, \"\\r\\nPercent Free Space: \", round(CounterValue), \"%\\r\\nAlert Threshold: <= \", _minValue, \"%\")",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 35,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "Low Disk Space Windows",
+        "Description": "Triggers an alert for a low disk space condition",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Low Disk Space Windows"
+        }
+      }
+    },
+    {
+      "AlertName": "Low Memory",
+      "AlertGuid": "1fcf8156-fcca-45d2-be45-aca07b90aee8",
+      "Tags": [
+        "Core"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Low Memory",
+        "Query": "let _minAvailableMB = 1024;\nlet _sampleInterval = 4h;\nlet _linuxMem = Perf\n| where TimeGenerated >= ago(_sampleInterval)\n| where CounterName == \"Available MBytes Memory\"\n| summarize mtgPerf=max(TimeGenerated), CounterValue=avg(CounterValue), SampleCount=count(CounterValue) by Computer\n| join kind=inner\n(\n    Heartbeat\n    | where OSType == \"Linux\"\n    | summarize max(TimeGenerated) by Computer\n)\non Computer\n| project Computer, mtgPerf, AvailableMBytes=round(CounterValue), SampleCount;\nlet _windowsMem = Perf\n| where TimeGenerated >= ago(_sampleInterval)\n| where CounterName == \"Available MBytes\"\n//and ObjectName == \"Logical Disk\"\n\n//and InstanceName matches regex \"/.*\"\n| summarize mtgPerf=max(TimeGenerated), CounterValue=avg(CounterValue), SampleCount=count(CounterValue) by Computer\n| join kind=inner\n(\n    Heartbeat\n    | where OSType == \"Windows\"\n    | summarize max(TimeGenerated) by Computer\n)\non Computer\n| project Computer, mtgPerf, AvailableMBytes=round(CounterValue), SampleCount;\n_linuxMem\n| union _windowsMem\n| where AvailableMBytes < _minAvailableMB\n| project       Computer      , TimeGenerated=mtgPerf      , CounterValue=AvailableMBytes       , AlertType_s = \"Low Available Memory\"      , Severity = 4      , SeverityName_s = \"WARNING\"      , AffectedCI_s = strcat(Computer, \"/FreeMemoryMB/\")      , AlertTitle_s = strcat(Computer, \": Low Available Memory\")      , AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nAverage Free Memory: \", AvailableMBytes, \" MB\\r\\nSample Period: Last \", _sampleInterval, \"\\r\\nSample Count: \", SampleCount, \"\\r\\nAlert Threshold: < \", _minAvailableMB, \" MB\")",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "Low Memory",
+        "Description": "Triggers an alert for a low memory condition",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Low Memory"
+        }
+      }
+    },
+    {
+      "AlertName": "NTFS - File System Corrupt",
+      "AlertGuid": "bb8527b1-6152-4d28-be04-c3d81cf98407",
+      "Tags": [
+        "Core"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - NTFS - File System Corrupt",
+        "Query": "Event | where EventLog == \"System\" and Source == \"DISK\" or Source == \"Ntfs\" and EventID == 55 | project Computer, TimeGenerated, AlertType_s = \"NTFS - File System Corrupt\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \": NTFS - File System Corrupt\"), AlertDetails_s = strcat(\"Event Description:\\r\\n\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "NTFS - File System Corrupt",
+        "Description": "Core monitoring alert for monitoring disk",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - NTFS - File System Corrupt"
+        }
+      }
+    },
+    {
+      "AlertName": "Unexpected shutdown",
+      "AlertGuid": "39128bb3-9a64-4d81-bc36-58be5e101514",
+      "Tags": [
+        "Core"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Unexpected shutdown",
+        "Query": "Event | where EventLog == \"System\" and EventID == 6008 | project Computer, TimeGenerated, AlertType_s = \"Unexpected shutdown\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer), AlertTitle_s = strcat(Computer, \": Unexpected Shutdown\"), AlertDetails_s = strcat(\"Multiple shutdowns detected in the past 24 hours\\r\\nEventID: 6008\\r\\nEvent Description: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 1440,
+        "QueryTimeSpan": 1440,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "Unexpected shutdown",
+        "Version": "1",
+        "Description": "Unexpected shutdown monitoring from core monitoring",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 1
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Unexpected shutdown"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Cannot recover the master database",
+      "AlertGuid": "1fcf8156-fcca-45d2-be45-aca07b90aeef9",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Cannot recover the SQL master database",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3417 | project Computer, TimeGenerated, AlertType_s = \"SQL-Cannot recover the master database\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \": SQL-Cannot recover the master database\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Connect SQL Master DB",
+        "Description": "Triggers an alert whenever there are issues detected in connecting or opening to the master database",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Cannot recover the SQL Server master database"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not find filegroup in sys.filegroups.",
+      "AlertGuid": "2fcf8156-fcca-45d2-be45-aca07b90ae5e7",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not find filegroup in sys.filegroups.",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 8932 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not find filegroup in sys.filegroups\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Could not find filegroup in sys.filegroups\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not find filegroup in sys.filegroups.",
+        "Description": "Triggers an alert whenever there are issues detected with the database filegroup",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Could not find filegroup in sys.filegroups."
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not mark database as suspect",
+      "AlertGuid": "3fcf8156-fcca-45d2-be45-aca07b90ae5c2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not mark database as suspect",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3413 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not mark database as suspect\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Could not mark database as suspect\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not mark database as suspect",
+        "Description": "Alert is triggered whenever there are corruption/inconsistency issues detected with the database and engine not being able to mark the database as suspect",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Could not mark database as suspect"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not recover database because of unresolved transaction outcomes",
+      "AlertGuid": "3ecf8156-fcca-45d2-be45-aca07b90ace5c2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not recover database because of unresolved transaction outcomes",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3431 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not recover database because of unresolved transaction outcomes\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Could not recover database because of unresolved transaction outcomes\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not recover database because of unresolved transaction outcomes",
+        "Description": "Alert is triggered whenever there are inconsistency issues detected with the database.",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Could not recover database because of unresolved transaction outcomes"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Database cannot be opened due to inaccessible files or insufficient memory or disk space",
+      "AlertGuid": "3fcdf8156-fcca-45d2-be45-aca07b90ace5c2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Database cannot be opened due to inaccessible files or insufficient memory or disk space",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 945 | project Computer, TimeGenerated, AlertType_s = \"Database cannot be opened due to inaccessible files or insufficient memory or disk space\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Database cannot be opened due to inaccessible files or insufficient memory or disk space\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Database cannot be opened due to inaccessible files or insufficient memory or disk space",
+        "Description": "Alert is triggered whenever there are low memory condition detected",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Database cannot be opened due to inaccessible files or insufficient memory or disk space"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Failed to allocate memory for common language runtime (CLR) functionality",
+      "AlertGuid": "9fcdf8156-fcca-45d2-be45-aca07b90ace5c3",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Failed to allocate memory for common language runtime (CLR) functionality",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 6289 | project Computer, TimeGenerated, AlertType_s = \"Failed to allocate memory for common language runtime (CLR) functionality\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Failed to allocate memory for common language runtime (CLR) functionality\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Failed to allocate memory for common language runtime (CLR) functionality",
+        "Description": "Alert is triggered whenever there are low memory condition detected for CLR execution",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - Failed to allocate memory for common language runtime (CLR) functionality"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: An error occurred during database recovery",
+      "AlertGuid": "7fcdf8156-fcca-45d2-be45-bca07b90ace5c4",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - An error occurred during database recovery",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3414 | project Computer, TimeGenerated, AlertType_s = \"An error occurred during database recovery\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":An error occurred during database recovery\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-An error occurred during database recovery",
+        "Description": "Alert is triggered whenever there are errors logged for database recovery",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "An error occurred during database recovery"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: The maximum number of user connections has already been reached",
+      "AlertGuid": "9fcdf8156-bfca-45d2-be45-cca07b10ace5c5",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - The maximum number of user connections has already been reached",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17809 | project Computer, TimeGenerated, AlertType_s = \"SQL-The maximum number of user connections has already been reached\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-The maximum number of user connections has already been reached\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-The maximum number of user connections has already been reached",
+        "Description": "Alert is triggered whenever the connection pool is exhausted, can occur due to low memory condition and other performance issues",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "The maximum number of user connections has already been reached"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: The server is too busy to perform the backup or restore operation",
+      "AlertGuid": "6fcdf8156-fbca-43e2-be45-aca17b90ade5b2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - The server is too busy to perform the backup or restore operation",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3267 | project Computer, TimeGenerated, AlertType_s = \"SQL-The server is too busy to perform the backup or restore operation\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-The server is too busy to perform the backup or restore operation\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-The server is too busy to perform the backup or restore operation",
+        "Description": "Alert is triggered whenever the backup operation fails due performance issues",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "The server is too busy to perform the backup or restore operation"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not do cleanup for the killed process",
+      "AlertGuid": "9bcdf8156-fbba-45d2-be45-aca07b90ace5c2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not do cleanup for the killed process",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 6103 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not do cleanup for the killed process\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Could not do cleanup for the killed process\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not do cleanup for the killed process",
+        "Description": "Alert is created when there was no successful rollback of killed process",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Could not do cleanup for the killed process"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not find FOREIGN KEY constraints for table, although the table is flagged as having them",
+      "AlertGuid": "9bcdf8156-fcca-45d2-be45-aca07b90ace5c4",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not find FOREIGN KEY constraints for table, although the table is flagged as having them",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 439 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not find FOREIGN KEY constraints for table, although the table is flagged as having them\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Could not find FOREIGN KEY constraints for table, although the table is flagged as having them\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not find FOREIGN KEY constraints for table, although the table is flagged as having them",
+        "Description": "Alert is created when there are database inconsistency detected",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Could not find FOREIGN KEY constraints for table, although the table is flagged as having them"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not write a CHECKPOINT record in database because the log is out of space",
+      "AlertGuid": "8bbdf8146-fbba-45d2-be45-aca07b10ace5d1",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Could not write a CHECKPOINT record in database because the log is out of space",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 3619 | project Computer, TimeGenerated, AlertType_s = \"Could not write a CHECKPOINT record in database because the log is out of space\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":Could not write a CHECKPOINT record in database because the log is out of space\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not write a CHECKPOINT record in database because the log is out of space",
+        "Description": "Alert is created when the database logfiles go out of space",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Could not write a CHECKPOINT record in database because the log is out of space"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Database capacity threshold exceeded",
+      "AlertGuid": "7bbdf8146-faac-45d2-be45-aca07b90ace5e3",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - Database capacity threshold exceeded",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where  EventID == 60120 | project Computer, TimeGenerated, AlertType_s = \"SQL-Database capacity threshold exceeded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Database capacity threshold exceeded\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Database capacity threshold exceeded",
+        "Description": "Alert is created when the database capacity threshold exceededs",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Database capacity threshold exceeded"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Enlist of MSDTC transaction failed",
+      "AlertGuid": "7bcdf8146-fbff-45d2-be45-aca07b90ace5d2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert -Enlist of MSDTC transaction failed",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 8510 | project Computer, TimeGenerated, AlertType_s = \"SQL-Enlist of MSDTC transaction failed\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Enlist of MSDTC transaction failed\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Enlist of MSDTC transaction failed",
+        "Description": "Alert is fired when inconsistency is detected with the distributed transaction ",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Enlist of MSDTC transaction failed"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Log Capacity threshold exceeded",
+      "AlertGuid": "7bbdf8236-66ff-45d2-be45-aca07b90ace5d2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Log Capacity threshold exceeded",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where  EventID == 60110 | project Computer, TimeGenerated, AlertType_s = \"SQL-Log Capacity threshold exceeded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Log Capacity threshold exceeded\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Log Capacity threshold exceeded",
+        "Description": "Alert is fired when log file Capacity threshold exceeded",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Log Capacity threshold exceeded"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Event 17063 DatabaseConsistencyErrors",
+      "AlertGuid": "25bdf8146-fbff-45d2-be45-aca07b90ace5d2",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Microsoft SQLServer 2014 Monitoring Event 17063 DatabaseConsistencyErrors",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where  EventID == 70000 | project Computer, TimeGenerated, AlertType_s = \"SQL-Database Consistency errors\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Database Consistency errors\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Database Consistency errors",
+        "Description": "Alert is fired when inconsistency is detected with the distributed transaction ",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Microsoft SQLServer 2014 Monitoring Event 17063 DatabaseConsistencyErrors"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures",
+      "AlertGuid": "1bbdf8247-63ff-45e2-be45-aca07b90ace5c1",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where  EventID == 61001 | project Computer, TimeGenerated, AlertType_s = \"SQL-Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures",
+        "Description": "Alert is fired when SQL Server job execution fails event 17063",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Override Custom Error 60200",
+      "AlertGuid": "61bdf8146-fbff-45d2-be45-aca07b90ace5w3",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Microsoft SQLServer 2014 Monitoring Override Custom Error 60200",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where  EventID == 60200 | project Computer, TimeGenerated, AlertType_s = \"SQL-Microsoft SQLServer 2014 Monitoring Override Custom Error 60200\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Microsoft SQLServer 2014 Monitoring Override Custom Error 60200\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Microsoft SQLServer 2014 Monitoring Override Custom Error 60200",
+        "Description": "Alert is fired when SQL Server event id 60200 is fired",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Microsoft SQLServer 2014 Monitoring Override Custom Error 60200"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription",
+      "AlertGuid": "3ccdf9267-63sf-99e2-ce54-bba07b90ace5c5",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 14151 | project Computer, TimeGenerated, AlertType_s = \"SQL-Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription",
+        "Description": "Alert is fired when event 14151",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: SQLServerAgent could not be started",
+      "AlertGuid": "3ffdf9267-63sf-99e2-ce54-ccb07b90ace5d7",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-SQLServerAgent could not be started",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 103 | project Computer, TimeGenerated, AlertType_s = \"SQL-SQLServerAgent could not be started\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-SQLServerAgent could not be started\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-SQLServerAgent could not be started",
+        "Description": "Alert is fired when SQL Server agent service could not be started",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "SQLServerAgent could not be started"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: The log for database is not available",
+      "AlertGuid": "3aadf9277-63af-99e2-ce54-bba07b90acd5d5",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-The log for database is not available",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 9001 | project Computer, TimeGenerated, AlertType_s = \"SQL-The log for database is not available\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-The log for database is not available\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-The log for database is not available",
+        "Description": "Alert is fired when the log for database is not available",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "The log for database is not available"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Transactional replication latency threshold exceeded",
+      "AlertGuid": "54fdf8146-fbaa-20e2-ae45-eea07d90ace5f5",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Transactional replication latency threshold exceeded",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" where  EventID == 17063 | where EventID == 60201 | project Computer, TimeGenerated, AlertType_s = \"SQL-Transactional replication latency threshold exceeded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Transactional replication latency threshold exceeded\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Transactional replication latency threshold exceeded",
+        "Description": "Alert is fired when SQL Server transactional replication latency threshold exceededs",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Transactional replication latency threshold exceeded"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: SQL Server Service Broker dialog caught an error",
+      "AlertGuid": "3aabc9357663ef-99e2-ce54-bba07b90ace4b4",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-SQL Server Service Broker dialog caught an error",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 9736 | project Computer, TimeGenerated, AlertType_s = \"SQL:SQL Server Service Broker dialog caught an error\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL:SQL Server Service Broker dialog caught an error\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-SQL Server Service Broker dialog caught an error",
+        "Description": "Alert is fired when the Service Broker message fails to get delivered",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "SQL Server Service Broker dialog caught an error"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Blocking threshold exceeded",
+      "AlertGuid": "35edf8146-ebac-20e2-ae25-cca07d90abd4f6",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Blocking threshold exceeded",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 17063 | where EventID == 60100 | project Computer, TimeGenerated, AlertType_s = \"SQL-Blocking threshold exceeded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Blocking threshold exceeded\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Blocking threshold exceeded",
+        "Description": "Alert is fired when the blocking threshold exceededs",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Blocking threshold exceeded"
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not allocate new page for database.There are no more pages available in filegroup",
+      "AlertGuid": "2ccbc897663ef-99e2-ce54-bba07b90ace3b1",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Could not allocate new page for database",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 1101 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not allocate new page for database.There are no more pages available in filegroup.\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Could not allocate new page for database.There are no more pages available in filegroup.\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not allocate new page for database.There are no more pages available in filegroup.",
+        "Description": "Alert is fired when engine could not allocate new page for database . There are no more pages available in filegroup.",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Could not allocate new page for database.There are no more pages available in filegroup."
+        }
+      }
+    },
+    {
+      "AlertName": "SQL: Could not allocate space for object  in database  because the  filegroup is full",
+      "AlertGuid": "25edc7126-ecff-20e2-ae25-cda07d10ace1c5",
+      "Tags": [
+        "SQL"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert-Could not allocate space for object in database because the filegroup is full",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 1105 | project Computer, TimeGenerated, AlertType_s = \"SQL-Could not allocate space for object in database  because the  filegroup is full\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL-Could not allocate space for object  in database  because the  filegroup is full\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 240,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "SQL-Could not allocate space for object  in database  because the  filegroup is full",
+        "Description": "Alert is fired when engine could not allocate space for object  in database  because the  filegroup is full",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Could not allocate space for object  in database  because the  filegroup is full"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Power sub system degraded or failed",
+      "AlertGuid": "c40aab23-0622-4648-9a67-6118858bdbd5",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Power sub system degraded or failed",
+        "Query": "Event | where EventLog == \"System\" | where EventID == 1103 or EventID == 1128 or EventID == 1126 or EventID == 1124 or EventID == 1125 or EventID == 1184 | where RenderedDescription contains \"System Information Agent: Health\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Power sub system degraded or failed\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Power sub system degraded or failed with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Power sub system degraded or failed",
+        "Description": "Power sub system degraded or failed. The fault tolerant power supply has degraded, failed or lost redundancy.",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Power sub system degraded or failed"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Fan degraded",
+      "AlertGuid": "804809b2-8cac-4d72-b186-ecd40f59ed95",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Fan degraded",
+        "Query": "Event | where EventLog == \"System\" | where Source == \"Server Agents\" | where EventID == 1131 or EventID == 1129 or EventID == 1086 | where RenderedDescription contains \"CPQHLTH.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Fan degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Fan degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Fan degraded",
+        "Description": "Fan degraded. A fault tolerant fan or system fan has been degraded.",
+        "Version": "1",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Fan degraded"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
+      "AlertGuid": "73032be3-1f4e-44a4-88be-ca25b797b1bc",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
+        "Query": "Event | where EventID == 1150 or EventID == 1151 | where RenderedDescription contains \"CPQRACK.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded with Event ID\", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded",
+        "Version": "1",
+        "Description": "Rack fans have failed.",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Rack Enclosure Fan Failed or Degraded"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Drive Array Physical Drive degraded",
+      "AlertGuid": "eca68326-ebc4-490d-b33b-071af8380e81",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Drive Array Physical Drive degraded",
+        "Query": "Event | where EventID == 1202 or EventID == 1203 or EventID == 1216 | where RenderedDescription  contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Physical Drive degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Physical Drive degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Drive Array Physical Drive degraded",
+        "Version": "1",
+        "Description": "The drive array physical drive has degraded.",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Drive Array Physical Drive degraded"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
+      "AlertGuid": "372ffd1b-2a78-4ef4-b801-2c902bc8d3c1",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
+        "Query": "Event | where EventLog == \"System\" | where EventID == 1200 | where Source == \"Storage Agents\" | where RenderedDescription contains \"new status of 6\" and RenderedDescription contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID, \"/readyForRebuild\"), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild\"), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild",
+        "Version": "1",
+        "Description": "The drive array logical drive status has changed to 'readyForRebuild'",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert- HP Windows (SNMP) Drive Array Logical Drive Status is readyForRebuild"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Drive Array Logical Drive Status is failed",
+      "AlertGuid": "749aee97-1666-4635-8f88-38afd598e9b5",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is failed",
+        "Query": "Event | where EventLog == \"System\" | where EventID == 1200 | where Source == \"Storage Agents\" | where RenderedDescription contains \"new status of 3\" and RenderedDescription contains \"CPQIDA.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Drive Array Logical Drive Status is failed\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID, \"/failed\"), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Drive Array Logical Drive Status is failed\"), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Drive Array Logical Drive Status is failed",
+        "Version": "1",
+        "Description": "The drive array logical drive status has changed to 'failed'",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 0
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Drive Array Logical Drive Status is failed"
+        }
+      }
+    },
+    {
+      "AlertName": "HP Windows (SNMP) Memory degraded",
+      "AlertGuid": "c1446d74-f632-49eb-b426-0e536386cfc6",
+      "Tags": [
+        "Physical,HP"
+      ],
+      "SavedSearch": {
+        "Category": "Core",
+        "DisplayName": "Alert - HP Windows (SNMP) Memory degraded",
+        "Query": "Event | where EventLog == \"System\" | where Source == \"Server Agents\" | where EventID == 1025 or EventID == 1026 or EventID == 1027 or EventID == 1028 or EventID == 1031 or EventID == 1071 or EventID == 1035 or EventID == 1039 | where RenderedDescription  contains \"CPQHLTH.MIB\" | project Computer, TimeGenerated, AlertType_s = \"HP Windows (SNMP) Memory degraded\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = strcat(Computer, \"/EventId-\", EventID), AlertTitle_s = strcat(Computer, \": HP Windows (SNMP) Memory degraded with Event ID \", EventID), AlertDetails_s = strcat(\"Computer: \", Computer, \"\\r\\nEvent ID: \", EventID, \"\\r\\nRenderedDescription: \", RenderedDescription)",
+        "Version": "1"
+      },
+      "Schedule": {
+        "Interval": 30,
+        "QueryTimeSpan": 30,
+        "Active": "true"
+      },
+      "AlertDefinition": {
+        "Name": "HP Windows (SNMP) Memory degraded",
+        "Version": "1",
+        "Description": "Memory degraded. Advanced Memory Protection has detected a memory fault.",
+        "Severity": "critical",
+        "Type": "Alert",
+        "Threshold": {
+          "Operator": "gt",
+          "Value": 1
+        },
+        "AzNsNotification": {
+          "GroupIds": [
+            "/subscriptions/subscrname/resourcegroups/resourcegrp/providers/microsoft.insights/actiongroups/samplecoreactiongroup"
+          ],
+          "CustomEmailSubject": "Alert - HP Windows (SNMP) Memory degraded"
+        }
+      }
+    }
+  ],
+  "Events": [
+    {
+      "EventLogName": "Application",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-ClusterAwareUpdating/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Desired State Configuration/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-FailoverClustering-CsvFs/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-FailoverClustering/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-GroupPolicy/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-Config/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-High-Availability/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-Integration/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-Shared-VHDX/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": false
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-SynthNic/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": false
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-VMMS/Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-VMMS/Networking",
+      "Error": true,
+      "Warning": true,
+      "Information": false
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-VMMS/Storage",
+      "Error": true,
+      "Warning": true,
+      "Information": false
+    },
+    {
+      "EventLogName": "Microsoft-Windows-Hyper-V-Worker-Admin",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-NetworkProfile/Operationa",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-SMBServer/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": false
+    },
+    {
+      "EventLogName": "Microsoft-Windows-TaskScheduler/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Microsoft-Windows-VHDMP/Operational",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "MSNIPAK",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Operations Manager",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "Setup",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    },
+    {
+      "EventLogName": "System",
+      "Error": true,
+      "Warning": true,
+      "Information": true
+    }
+  ],
+  "PerformanceCounters": [
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Read Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Read Latency",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Reads/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Write Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Write Latency",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Cluster CSV File System",
+      "CounterName": "IO Writes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Hyper-V Dynamic Memory VM",
+      "CounterName": "Guest Visible Physical Memory",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Hyper-V Dynamic Memory VM",
+      "CounterName": "Physical Memory",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Hyper-V Hypervisor Logical Processor",
+      "CounterName": "% Total Run Time",
+      "InstanceName": "*",
+      "intervalSeconds": 60
+    },
+    {
+      "ObjectName": "Hyper-V Hypervisor Virtual Processor",
+      "CounterName": "% Total Run Time",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Hyper-V Virtual Storage Device",
+      "CounterName": "Read Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Hyper-V Virtual Storage Device",
+      "CounterName": "Read Operations/Sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Hyper-V Virtual Storage Device",
+      "CounterName": "Write Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Hyper-V Virtual Storage Device",
+      "CounterName": "Write Operations/Sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "% Free Space",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Avg. Disk sec/Read",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Avg. Disk sec/Transfer",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Avg. Disk sec/Write",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Current Disk Queue Length",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Read Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Reads/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Transfers/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Write Bytes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Disk Writes/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "LogicalDisk",
+      "CounterName": "Free Megabytes",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Memory",
+      "CounterName": "% Committed Bytes In Use",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Memory",
+      "CounterName": "Available MBytes",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Memory",
+      "CounterName": "Commit Limit",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Memory",
+      "CounterName": "Committed Bytes",
+      "InstanceName": "*",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Network Adapter",
+      "CounterName": "Bytes Received/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Network Adapter",
+      "CounterName": "Bytes Sent/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Network Interface",
+      "CounterName": "Bytes Total/sec",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "NUMA Node Memory",
+      "CounterName": "Available MBytes",
+      "InstanceName": "_Total",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "NUMA Node Memory",
+      "CounterName": "Total MBytes",
+      "InstanceName": "_Total",
+      "intervalSeconds": 1800
+    },
+    {
+      "ObjectName": "Processor",
+      "CounterName": "% Processor Time",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "Processor",
+      "CounterName": "% Processor Time",
+      "InstanceName": "_Total",
+      "intervalSeconds": 60
+    },
+    {
+      "ObjectName": "System",
+      "CounterName": "Processor Queue Length",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    },
+    {
+      "ObjectName": "TCPv4",
+      "CounterName": "Connections Established",
+      "InstanceName": "*",
+      "intervalSeconds": 300
+    }
+  ]
 }
