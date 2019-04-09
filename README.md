@@ -162,7 +162,7 @@ https://docs.microsoft.com/en-us/azure/log-analytics/log-analytics-api-alerts
 ## Alert Configuration File
 The alert configuration file, **DefaultAlertConfig.json**, contains the alert definitions for Alerts included in the Alert Toolkit. Alerts can be added or removed from the configuration file before running the script.
 
-###Creating a custom alert
+### Creating a custom alert
 A custom alert can be added to the toolkit by modifying the configuration file before running the deployment script. Existing alerts can be used an example, but the alert should have the following elements. More detailed information about what is required by the Log Analytics REST API can be found [here](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/api-alert).
 
 **AlertName** - Name of the alert. To be displayed in script output.
@@ -234,15 +234,15 @@ lt = Less Than
     }
 ```
 
-###Creating a new GUID
+### Creating a new GUID
 Run the following in a PowerShell console to generate a new GUID.
 ``` powershell
 New-Guid
 ````
 
-![Sample GUID creation output](/docs/images/sampleOutputGuid.png)
+![Sample GUID creation output](/docs/images/sampleOutputGuid2.png)
 
-###Converting KQL to JSON
+### Converting KQL to JSON
 To convert an existing Log Analytics query to JSON you can use the folloiwng method in PowerShell.
 
 ``` powershell
