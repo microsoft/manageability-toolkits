@@ -1,8 +1,8 @@
 ﻿<#
 	.SYNOPSIS
-		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
+		The Alert Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
 	.DESCRIPTION
-		The Core Monitoring Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
+		The Alert Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics.
 		The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
 	.Parameter SubscriptionID
 		Specifies the Azure Subscription ID for the workspace where the alerts will be created.
@@ -27,22 +27,22 @@
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US'
 	   
-	   This command will run the Core Monitoring Toolkit script with the provided parameters.
+	   This command will run the Alert Toolkit script with the provided parameters.
 	   
 	.EXAMPLE
 	   .\New-CoreAlerts.ps1
 	   
-	   This command will run the Core Monitoring Toolkit script and prompt the user for required parameters.
+	   This command will run the Alert Toolkit script and prompt the user for required parameters.
 	   
 	.EXAMPLE 
 	   .\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -ExistingActionGroupName 'useractiongroupname' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' 
 	   
-	   This command will run the Core Monitoring Toolkit script with the provided parameters, adding the existing action group named 'useractiongroupname' to all alerts created by the toolkit.
+	   This command will run the Alert Toolkit script with the provided parameters, adding the existing action group named 'useractiongroupname' to all alerts created by the toolkit.
 	   
 	.EXAMPLE
 		.\New-CoreAlerts.ps1 -SubscriptionId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' -WorkspaceName 'alertsWorkspace' -ResourceGroup 'alertsRG' -Location 'East US' -AlertTypes "Core,SQL"
 
-		This command will run the Core Monitoring Toolkit script with the provided parameters, deploying only alerts that are tagged with 'Core' or 'SQL'
+		This command will run the Alert Toolkit script with the provided parameters, deploying only alerts that are tagged with 'Core' or 'SQL'
 		
 	.LINK
 	https://github.com/Microsoft/manageability-toolkits
@@ -622,7 +622,7 @@ if (!$AlertEmailAddress -and !$ExistingActionGroupName)
 	$AlertEmailAddress = Read-Host -Prompt "`nEnter the email address to be subscribed for alerts"
 }
 
-# Retrieve core monitoring config data from configuration file and convert from JSON to PowerShell object
+# Retrieve alert config data from configuration file and convert from JSON to PowerShell object
 $alertConfig = (Get-Content $ConfigPath) | ConvertFrom-Json
 
 # Error if the alert type specified is not valid.
@@ -654,7 +654,7 @@ if ($ExistingActionGroupName)
 {
 	Write-Verbose "User provided existing action group"
 	$type = "Microsoft.Insights/ActionGroups"
-	$actiongroupFindResult = Find-AzureRmResource -ResourceType $type -ResourceNameEquals $ExistingActionGroupName
+	$actiongroupFindResult = Get-AzureRmResource -ResourceType $type -Name $ExistingActionGroupName
 
 	if ($actiongroupFindResult)
 	{
@@ -674,7 +674,7 @@ else
 	$ActionResourceGroup = $ResourceGroup
 	$ActionGroupName = $NewActionGroupName
 
-	# Creates action group to be used for core monitoring alerts
+	# Creates action group to be used for alerts
 	Write-Host "Creating action group..."
 	$actionGroupCreateResult = New-ActionGroup `
 		-SubscriptionID $SubscriptionID `
