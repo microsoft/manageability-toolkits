@@ -15,7 +15,7 @@
 The Alert Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics. The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
 
 ##Prerequisites
-- [AzureRm PowerShell Module installed - Version 6.0+](https://docs.microsoft.com/en-us/powershell/azure/azurerm/install-azurerm-ps)
+- [Azure PowerShell module installed (Az, not AzureRm) - Version 2.4.0+](https://docs.microsoft.com/en-us/powershell/azure/install-az-ps)
 - Log Analytics workspace created
 - User running the toolkit will need Contributor role on the resource group and workspace
 

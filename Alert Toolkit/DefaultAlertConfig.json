@@ -178,7 +178,7 @@
       }
     },
     {
-      "AlertName": "SQL: Cannot recover the master database",
+      "AlertName": "SQL - Cannot recover the master database",
       "AlertGuid": "1fcf8156-fcca-45d2-be45-aca07b90aeef9",
       "Tags": [
         "SQL"
@@ -213,7 +213,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not find filegroup in sys.filegroups.",
+      "AlertName": "SQL - Could not find filegroup in sys.filegroups.",
       "AlertGuid": "2fcf8156-fcca-45d2-be45-aca07b90ae5e7",
       "Tags": [
         "SQL"
@@ -248,7 +248,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not mark database as suspect",
+      "AlertName": "SQL - Could not mark database as suspect",
       "AlertGuid": "3fcf8156-fcca-45d2-be45-aca07b90ae5c2",
       "Tags": [
         "SQL"
@@ -283,7 +283,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not recover database because of unresolved transaction outcomes",
+      "AlertName": "SQL - Could not recover database because of unresolved transaction outcomes",
       "AlertGuid": "3ecf8156-fcca-45d2-be45-aca07b90ace5c2",
       "Tags": [
         "SQL"
@@ -318,7 +318,7 @@
       }
     },
     {
-      "AlertName": "SQL: Database cannot be opened due to inaccessible files or insufficient memory or disk space",
+      "AlertName": "SQL - Database cannot be opened due to inaccessible files or insufficient memory or disk space",
       "AlertGuid": "3fcdf8156-fcca-45d2-be45-aca07b90ace5c2",
       "Tags": [
         "SQL"
@@ -353,7 +353,7 @@
       }
     },
     {
-      "AlertName": "SQL: Failed to allocate memory for common language runtime (CLR) functionality",
+      "AlertName": "SQL - Failed to allocate memory for common language runtime (CLR) functionality",
       "AlertGuid": "9fcdf8156-fcca-45d2-be45-aca07b90ace5c3",
       "Tags": [
         "SQL"
@@ -388,7 +388,7 @@
       }
     },
     {
-      "AlertName": "SQL: An error occurred during database recovery",
+      "AlertName": "SQL - An error occurred during database recovery",
       "AlertGuid": "7fcdf8156-fcca-45d2-be45-bca07b90ace5c4",
       "Tags": [
         "SQL"
@@ -423,7 +423,7 @@
       }
     },
     {
-      "AlertName": "SQL: The maximum number of user connections has already been reached",
+      "AlertName": "SQL - The maximum number of user connections has already been reached",
       "AlertGuid": "9fcdf8156-bfca-45d2-be45-cca07b10ace5c5",
       "Tags": [
         "SQL"
@@ -458,7 +458,7 @@
       }
     },
     {
-      "AlertName": "SQL: The server is too busy to perform the backup or restore operation",
+      "AlertName": "SQL - The server is too busy to perform the backup or restore operation",
       "AlertGuid": "6fcdf8156-fbca-43e2-be45-aca17b90ade5b2",
       "Tags": [
         "SQL"
@@ -493,7 +493,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not do cleanup for the killed process",
+      "AlertName": "SQL - Could not do cleanup for the killed process",
       "AlertGuid": "9bcdf8156-fbba-45d2-be45-aca07b90ace5c2",
       "Tags": [
         "SQL"
@@ -528,7 +528,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not find FOREIGN KEY constraints for table, although the table is flagged as having them",
+      "AlertName": "SQL - Could not find FOREIGN KEY constraints for table, although the table is flagged as having them",
       "AlertGuid": "9bcdf8156-fcca-45d2-be45-aca07b90ace5c4",
       "Tags": [
         "SQL"
@@ -563,7 +563,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not write a CHECKPOINT record in database because the log is out of space",
+      "AlertName": "SQL - Could not write a CHECKPOINT record in database because the log is out of space",
       "AlertGuid": "8bbdf8146-fbba-45d2-be45-aca07b10ace5d1",
       "Tags": [
         "SQL"
@@ -598,7 +598,7 @@
       }
     },
     {
-      "AlertName": "SQL: Database capacity threshold exceeded",
+      "AlertName": "SQL - Database capacity threshold exceeded",
       "AlertGuid": "7bbdf8146-faac-45d2-be45-aca07b90ace5e3",
       "Tags": [
         "SQL"
@@ -633,7 +633,7 @@
       }
     },
     {
-      "AlertName": "SQL: Enlist of MSDTC transaction failed",
+      "AlertName": "SQL - Enlist of MSDTC transaction failed",
       "AlertGuid": "7bcdf8146-fbff-45d2-be45-aca07b90ace5d2",
       "Tags": [
         "SQL"
@@ -668,7 +668,7 @@
       }
     },
     {
-      "AlertName": "SQL: Log Capacity threshold exceeded",
+      "AlertName": "SQL - Log Capacity threshold exceeded",
       "AlertGuid": "7bbdf8236-66ff-45d2-be45-aca07b90ace5d2",
       "Tags": [
         "SQL"
@@ -703,7 +703,7 @@
       }
     },
     {
-      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Event 17063 DatabaseConsistencyErrors",
+      "AlertName": "SQL - Microsoft SQLServer 2014 Monitoring Event 17063 DatabaseConsistencyErrors",
       "AlertGuid": "25bdf8146-fbff-45d2-be45-aca07b90ace5d2",
       "Tags": [
         "SQL"
@@ -738,7 +738,7 @@
       }
     },
     {
-      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures",
+      "AlertName": "SQL - Microsoft SQLServer 2014 Monitoring Event 17063 SQLOpsJobExecutionfailures",
       "AlertGuid": "1bbdf8247-63ff-45e2-be45-aca07b90ace5c1",
       "Tags": [
         "SQL"
@@ -773,7 +773,7 @@
       }
     },
     {
-      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Override Custom Error 60200",
+      "AlertName": "SQL - Microsoft SQLServer 2014 Monitoring Override Custom Error 60200",
       "AlertGuid": "61bdf8146-fbff-45d2-be45-aca07b90ace5w3",
       "Tags": [
         "SQL"
@@ -808,7 +808,7 @@
       }
     },
     {
-      "AlertName": "SQL: Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription",
+      "AlertName": "SQL - Microsoft SQLServer 2014 Monitoring Override Event14151 ExpiredSubscription",
       "AlertGuid": "3ccdf9267-63sf-99e2-ce54-bba07b90ace5c5",
       "Tags": [
         "SQL"
@@ -843,7 +843,7 @@
       }
     },
     {
-      "AlertName": "SQL: SQLServerAgent could not be started",
+      "AlertName": "SQL - SQLServerAgent could not be started",
       "AlertGuid": "3ffdf9267-63sf-99e2-ce54-ccb07b90ace5d7",
       "Tags": [
         "SQL"
@@ -878,7 +878,7 @@
       }
     },
     {
-      "AlertName": "SQL: The log for database is not available",
+      "AlertName": "SQL - The log for database is not available",
       "AlertGuid": "3aadf9277-63af-99e2-ce54-bba07b90acd5d5",
       "Tags": [
         "SQL"
@@ -913,7 +913,7 @@
       }
     },
     {
-      "AlertName": "SQL: Transactional replication latency threshold exceeded",
+      "AlertName": "SQL - Transactional replication latency threshold exceeded",
       "AlertGuid": "54fdf8146-fbaa-20e2-ae45-eea07d90ace5f5",
       "Tags": [
         "SQL"
@@ -948,7 +948,7 @@
       }
     },
     {
-      "AlertName": "SQL: SQL Server Service Broker dialog caught an error",
+      "AlertName": "SQL - SQL Server Service Broker dialog caught an error",
       "AlertGuid": "3aabc9357663ef-99e2-ce54-bba07b90ace4b4",
       "Tags": [
         "SQL"
@@ -956,7 +956,7 @@
       "SavedSearch": {
         "Category": "Core",
         "DisplayName": "Alert-SQL Server Service Broker dialog caught an error",
-        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 9736 | project Computer, TimeGenerated, AlertType_s = \"SQL:SQL Server Service Broker dialog caught an error\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL:SQL Server Service Broker dialog caught an error\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
+        "Query": "Event | where EventLog == \"Application\" | where Source == \"MSSQLSERVER\" | where  EventID == 9736 | project Computer, TimeGenerated, AlertType_s = \"SQL -SQL Server Service Broker dialog caught an error\", Severity = 4, SeverityName_s = \"WARNING\", AffectedCI_s = Computer, AlertTitle_s = strcat(Computer, \":SQL -SQL Server Service Broker dialog caught an error\"), AlertDetails_s = strcat(\"Event Description:\", RenderedDescription)",
         "Version": "1"
       },
       "Schedule": {
@@ -983,7 +983,7 @@
       }
     },
     {
-      "AlertName": "SQL: Blocking threshold exceeded",
+      "AlertName": "SQL - Blocking threshold exceeded",
       "AlertGuid": "35edf8146-ebac-20e2-ae25-cca07d90abd4f6",
       "Tags": [
         "SQL"
@@ -1018,7 +1018,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not allocate new page for database.There are no more pages available in filegroup",
+      "AlertName": "SQL - Could not allocate new page for database.There are no more pages available in filegroup",
       "AlertGuid": "2ccbc897663ef-99e2-ce54-bba07b90ace3b1",
       "Tags": [
         "SQL"
@@ -1053,7 +1053,7 @@
       }
     },
     {
-      "AlertName": "SQL: Could not allocate space for object  in database  because the  filegroup is full",
+      "AlertName": "SQL - Could not allocate space for object  in database  because the  filegroup is full",
       "AlertGuid": "25edc7126-ecff-20e2-ae25-cda07d10ace1c5",
       "Tags": [
         "SQL"

@@ -88,92 +88,6 @@ param (
 	[string]$ConfigPath = ".\DefaultAlertConfig.json"
 )
 
-# Taken from https://gallery.technet.microsoft.com/scriptcenter/Easily-obtain-AccessToken-3ba6e593
-function Get-AzureRmCachedAccessToken()
-{
-    $ErrorActionPreference = 'Stop'
-  
-    if(-not (Get-Module AzureRm.Profile)) {
-        Import-Module AzureRm.Profile
-    }
-    $azureRmProfileModuleVersion = (Get-Module AzureRm.Profile).Version
-    # refactoring performed in AzureRm.Profile v3.0 or later
-    if($azureRmProfileModuleVersion.Major -ge 3) {
-        $azureRmProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
-        if(-not $azureRmProfile.Accounts.Count) {
-            Write-Error "Ensure you have logged in before calling this function."    
-        }
-    } else {
-        # AzureRm.Profile < v3.0
-        $azureRmProfile = [Microsoft.WindowsAzure.Commands.Common.AzureRmProfileProvider]::Instance.Profile
-        if(-not $azureRmProfile.Context.Account.Count) {
-            Write-Error "Ensure you have logged in before calling this function."    
-        }
-    }
-  
-    $currentAzureContext = Get-AzureRmContext
-    $profileClient = New-Object Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient($azureRmProfile)
-    Write-Debug ("Getting access token for tenant" + $currentAzureContext.Subscription.TenantId)
-    $token = $profileClient.AcquireAccessToken($currentAzureContext.Subscription.TenantId)
-    $token.AccessToken
-}
-
-# Taken from https://gallery.technet.microsoft.com/scriptcenter/Easily-obtain-AccessToken-3ba6e593
-function Get-AzureRmBearerToken()
-{
-    $ErrorActionPreference = 'Stop'
-    ('Bearer {0}' -f (Get-AzureRmCachedAccessToken))
-}
-
-# Create a new action group
-function New-ActionGroup
-{
-	[CmdletBinding()]
-	param
-	(
-		[Parameter(Mandatory=$true)]
-		[string]$SubscriptionID,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ResourceGroup,
-
-		[Parameter(Mandatory=$true)]
-		[string]$AlertEmailAddress,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ActionGroupName,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ActionGroupShortName
-	)
-
-	try
-	{
-		# Extract the user name from the email address and build the email action name from it.
-		$emailUser = $AlertEmailAddress.Split("@")[0]
-		$emailActionName = "email-$emailUser"
-
-		Write-Verbose "Variable AlertEmailAddress = $AlertEmailAddress"
-		Write-Verbose "Variable emailUser = $emailUser"
-		Write-Verbose "Variable emailActionName = $emailActionName"
-
-		$ResourceId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroup/providers/microsoft.insights/actionGroups/$ActionGroupName"
-		$GroupProperties = [PSCustomObject]@{
-			groupShortName = $ActionGroupShortName
-			enabled = $true
-			emailReceivers = @([pscustomobject]@{name = $emailActionName;emailAddress = $AlertEmailAddress})
-		}
-
-		New-AzureRmResource -Location "Global" -ResourceId $ResourceId -Properties $GroupProperties -ApiVersion "2017-04-01" -Force
-	}
-	catch
-	{
-		$ErrorMessage = $_.Exception.Message
-		"Error occurred while creating action groups: $ErrorMessage"
-		exit
-	}
-}
-
 # Check for the valid alert types. A valid alert type is defined as any alert type listed as a tag in the alert config file.
 # This function will first determine the unique alert types present across all alerts in the alert config file. This is then
 # compared with the alert types provided as an input parameter. If all inputted alert types exist in the config file, the
@@ -264,158 +178,6 @@ function Get-Alerts
 	return $alerts
 }
 
-# Create a new saved search
-function New-AlertSavedSearch
-{
-	[CmdletBinding()]
-	param
-	(
-		[Parameter(Mandatory=$true)]
-		[string]$SubscriptionID,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ResourceGroup,
-
-		[Parameter(Mandatory=$true)]
-		[string]$WorkspaceName,
-
-		[Parameter(Mandatory=$true)]
-		[string]$Apiversion,
-
-		[Parameter(Mandatory=$true)]
-		[string]$SavedSearchId,
-
-		[Parameter(Mandatory=$true)]
-		[PSCustomObject]$Properties
-	)
-
-	Write-Verbose "Creating new alert saved search"
-	try
-	{
-		$ResourceId = "/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/"
-		Write-Verbose "ResourceId: $ResourceId"
-		Write-Verbose "Saved Search Query: $($Properties.Query)"
-
-		New-AzureRmResource -ResourceId $ResourceId -Properties $Properties -ApiVersion "2017-03-15-preview" -Force
-	}
-	catch
-	{
-		$ErrorMessage = $_.Exception.Message
-		Write-Error "Error occurred while creating Saved searches: $ErrorMessage"
-		Exit 1
-	}
-}
-
-# Create a new schedule for the saved search
-function New-AlertSchedule
-{
-	[CmdletBinding()]
-	param
-	(
-		[Parameter(Mandatory=$true)]
-		[string]$SubscriptionID,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ResourceGroup,
-
-		[Parameter(Mandatory=$true)]
-		[string]$WorkspaceName,
-
-		[Parameter(Mandatory=$true)]
-		[string]$Apiversion,
-
-		[Parameter(Mandatory=$true)]
-		[string]$SavedSearchId,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ScheduleId,
-
-		[Parameter(Mandatory=$true)]
-		[PSCustomObject]$Properties
-	)
-
-	Write-Verbose "Creating new alert schedule"
-	try
-	{
-		# Get json in the format of "{'properties': { 'Interval': 10, 'QueryTimeSpan':10, 'Active':'true' }"
-		$scheduleJson = [PSCustomObject]@{properties = $Properties} | ConvertTo-Json
-
-		$header = @{
-			'Content-Type'='application\json'
-			'Authorization'= Get-AzureRmBearerToken
-		}
-
-		$uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/schedules/$($ScheduleId)?api-version=$($Apiversion)"
-		Write-Verbose "URI: $uri"
-		Write-Verbose "Json payload: $scheduleJson"
-
-		Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $scheduleJson -ContentType "application/json"
-	}
-	catch
-	{
-		$ErrorMessage = $_.Exception.Message
-		Write-Error "Error occurred while creating Schedule: $ErrorMessage"
-		Exit 1
-	}
-}
-
-# Create a new action for a schedule, completing the alert configuration
-function New-AzureAlert
-{
-	[CmdletBinding()]
-	param
-	(
-		[Parameter(Mandatory=$true)]
-		[string]$SubscriptionID,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ResourceGroup,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ActionResourceGroup,
-
-		[Parameter(Mandatory=$true)]
-		[string]$WorkspaceName,
-
-		[Parameter(Mandatory=$true)]
-		[string]$Apiversion,
-
-		[Parameter(Mandatory=$true)]
-		[string]$SavedSearchId,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ScheduleId,
-
-		[Parameter(Mandatory=$true)]
-		[string]$AlertId,
-
-		[Parameter(Mandatory=$true)]
-		[string]$ActionGroupName,
-
-		[Parameter(Mandatory=$true)]
-		[PSCustomObject]$Properties
-	)
-
-	Write-Verbose "Creating new alert"
-	$header = @{
-		'Content-Type'='application\json'
-		'Authorization'= Get-AzureRmBearerToken
-	}
-
-	$uri = "https://management.azure.com/subscriptions/$SubscriptionId/resourcegroups/$ResourceGroup/providers/Microsoft.OperationalInsights/workspaces/$WorkspaceName/savedSearches/$SavedSearchId/schedules/$ScheduleId/actions/$($AlertId)?api-version=$($Apiversion)"
-
-	# Depth parameter must be large enough so that arrays deeper into the JSON aren't converted to a single line of text.
-	$alertsJson = [PSCustomObject]@{properties = $Properties} | ConvertTo-Json -Depth 5
-	$alertsJson = $alertsJson.Replace("samplecoreactiongroup", $ActionGroupName)
-	$alertsJson = $alertsJson.Replace("subscrname", $SubscriptionId)
-	$alertsJson = $alertsJson.Replace("resourcegrp", $ActionResourceGroup)
-
-	Write-Verbose "URI: $uri"
-	Write-Verbose "Json payload: $alertsJson"
-
-	Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $alertsJson -ContentType "application/json"
-}
-
 function Update-WorkspaceEventCollection
 {
 	[CmdletBinding()]
@@ -434,7 +196,7 @@ function Update-WorkspaceEventCollection
 	Write-Verbose "Resource Group Name: '$ResourceGroup'"
 
 	Write-Verbose "Getting current windows event collection configuration from workspace"
-	$CurrentWindowsEventConfig = Get-AzureRmOperationalInsightsDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Kind WindowsEvent | Select-Object `
+	$CurrentWindowsEventConfig = Get-AzOperationalInsightsDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Kind WindowsEvent | Select-Object `
 		Name, `
 		@{n='EventLogName'; e={ $_.Properties.EventLogName }}, `
 		@{n='CollectErrors'; e={$_.Properties.EventTypes.EventType -contains 'Error' }}, `
@@ -473,7 +235,7 @@ function Update-WorkspaceEventCollection
 
 			Write-Verbose $NewDataSourceName
 
-			New-AzureRmOperationalInsightsWindowsEventDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Name $NewDataSourceName @EventArgs | Out-Null
+			New-AzOperationalInsightsWindowsEventDataSource -WorkspaceName $WorkspaceName -ResourceGroupName $ResourceGroup -Name $NewDataSourceName @EventArgs | Out-Null
 		}
 		else
 		{
@@ -498,7 +260,7 @@ function Update-WorkspacePerfCollection
 	Write-Verbose "Entering function: 'Update-WorkspacePerfCollection'"
 
 	Write-Verbose "Getting current windows event collection configuration from workspace"
-	$CurrentWindowsPerfConfig = Get-AzureRmOperationalInsightsDataSource -Workspace $Workspace -Kind WindowsPerformanceCounter | Select-Object `
+	$CurrentWindowsPerfConfig = Get-AzOperationalInsightsDataSource -Workspace $Workspace -Kind WindowsPerformanceCounter | Select-Object `
 		Name, `
 		@{n='ObjectName'; e={ $_.Properties.ObjectName }}, `
 		@{n='InstanceName'; e={$_.Properties.InstanceName }}, `
@@ -527,7 +289,7 @@ function Update-WorkspacePerfCollection
 
 			Write-Verbose $NewDataSourceName
 
-			New-AzureRmOperationalInsightsWindowsPerformanceCounterDataSource -Workspace $Workspace -Name $NewDataSourceName @EventArgs | Out-Null
+			New-AzOperationalInsightsWindowsPerformanceCounterDataSource -Workspace $Workspace -Name $NewDataSourceName @EventArgs | Out-Null
 		}
 		else
 		{
@@ -551,6 +313,7 @@ else
 	Exit 1
 }
 
+Set-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings "true"
 
 # Make sure there are no spaces in action group short name. Need to figure out how to pass spaces in API call.
 # The call fails with spaces,but GUI will allow creation with spaces.
@@ -563,16 +326,16 @@ if ($ActionGroupShortName.Contains(" "))
 try
 {
 	Write-Host "Logging into Azure and selecting subscription..."
-	if ([string]::IsNullOrEmpty($(Get-AzureRmContext).Account))
+	if ([string]::IsNullOrEmpty($(Get-AzContext).Account))
 	{
-		Login-AzureRmAccount
+		Connect-AzAccount
 	}
 	else
 	{
-		Write-Host "Existing AzureRM session detected. Skipping login prompt."
+		Write-Host "Existing Az session detected. Skipping login prompt."
 	}
 
-	Select-AzureRmSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
+	Select-AzSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
 }
 catch
 {
@@ -584,7 +347,7 @@ Write-Host "Verifying parameters..."
 # Verify Subscription exists. Probably a moot point since we would have failed to login if this was not valid.
 try
 {
-	Get-AzureRmSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
+	Get-AzSubscription -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
 }
 catch
 {
@@ -595,7 +358,7 @@ catch
 # Verify Resource Group exists. Potential to use ARM templates later to give the option to create as part of toolkit.
 try
 {
-	Get-AzureRmResourceGroup -Name $ResourceGroup -ErrorAction Stop | Out-Null
+	Get-AzResourceGroup -Name $ResourceGroup -ErrorAction Stop | Out-Null
 }
 catch
 {
@@ -606,8 +369,10 @@ catch
 # Verify Workspace. Potential to use ARM templates later to give the option to create as part of toolkit.
 try
 {
-	Get-AzureRmOperationalInsightsIntelligencePacks -ResourceGroupName $ResourceGroup -WorkspaceName $WorkspaceName -ErrorAction Stop | Out-Null
-	$workspace = Get-AzureRmOperationalInsightsWorkspace | Where-Object { $_.Name -eq $WorkspaceName; }
+	$workspace = Get-AzOperationalInsightsWorkspace -ErrorAction Stop | Where-Object { $_.Name -eq $WorkspaceName; }
+
+	# Convert the location derived from the workspace to a format accepted by the Azure Monitor commands
+	$workspaceLocation =  (Get-AzLocation | Where-Object DisplayName -eq $workspace.Location).Location
 }
 catch
 {
@@ -654,13 +419,14 @@ if ($ExistingActionGroupName)
 {
 	Write-Verbose "User provided existing action group"
 	$type = "Microsoft.Insights/ActionGroups"
-	$actiongroupFindResult = Get-AzureRmResource -ResourceType $type -Name $ExistingActionGroupName
+	$actiongroupFindResult = Get-AzResource -ResourceType $type -Name $ExistingActionGroupName
 
 	if ($actiongroupFindResult)
 	{
 		Write-Verbose "User provided action group found"
 		$ActionResourceGroup = $actiongroupFindResult.ResourceGroupName
 		$ActionGroupName = $ExistingActionGroupName
+		$actionGroupId = $actiongroupFindResult.ResourceId
 	}
 	else
 	{
@@ -676,12 +442,17 @@ else
 
 	# Creates action group to be used for alerts
 	Write-Host "Creating action group..."
-	$actionGroupCreateResult = New-ActionGroup `
-		-SubscriptionID $SubscriptionID `
+	$emailUser = $AlertEmailAddress.Split("@")[0]
+	$emailActionName = "email-$emailUser"
+	$emailReceiver = New-AzActionGroupReceiver -Name $emailActionName -EmailReceiver -EmailAddress $AlertEmailAddress
+	$newActionGroup = Set-AzActionGroup `
+		-Name $NewActionGroupName `
 		-ResourceGroup $ResourceGroup `
-		-AlertEmailAddress $AlertEmailAddress `
-		-ActionGroupName $NewActionGroupName `
-		-ActionGroupShortName $ActionGroupShortName
+		-ShortName $ActionGroupShortName `
+		-Receiver $emailReceiver `
+		3> $null
+	$actionGroupObject = Get-AzActionGroup -ResourceGroup $ResourceGroup -Name $NewActionGroupName 3> $null
+	$actionGroupId = $actionGroupObject.Id
 	Write-Host "Action group with name, '$NewActionGroupName' created successfully"
 }
 
@@ -720,46 +491,140 @@ foreach ($alert in $alertlist){
 
 	Write-Host " -Creating alert $alertProgressCount of $($numAlerts): '$alertDisplayName'"
 
+	Write-Verbose "Creating rule source..."
+	Write-Verbose "Workspace resource id: $($workspace.ResourceId)"
+	Write-Verbose "Alert query: $($alert.SavedSearch.Query)"
+	try
+	{
+		$source = New-AzScheduledQueryRuleSource `
+			-Query $alert.SavedSearch.Query `
+			-DataSourceId $workspace.ResourceId `
+			-QueryType "ResultCount" `
+			-ErrorAction Stop `
+			3> $null
+
+		Write-Verbose "Rule source created successfully"
+	}
+	catch
+	{
+		Write-Error "Failed to create rule source with exception: $($_.Exception.Message)"
+		Exit 1
+	}
 	
-	# Create Saved Searches to be used in Alert configurations
-	Write-Verbose "Creating Saved Searches..."
-	$savedSearchResult = New-AlertSavedSearch `
-		-SubscriptionId $SubscriptionID `
-		-ResourceGroup $ResourceGroup `
-		-WorkspaceName $WorkspaceName `
-		-SavedSearchId $alertGuid `
-		-ApiVersion $apiversion `
-		-Properties $alert.SavedSearch
-	Write-Verbose "Saved Searches created successfully"
 
 	# Create Schedules.
-	Write-Verbose "Creating Schedules..."
-	$scheduleResult = New-AlertSchedule `
-		-SubscriptionId $SubscriptionID `
-		-ResourceGroup $ResourceGroup `
-		-WorkspaceName $WorkspaceName `
-		-SavedSearchId $alertGuid `
-		-ScheduleId $alertGuid `
-		-ApiVersion $apiversion `
-		-Properties $alert.Schedule
-	Write-Verbose "Schedules created successfully"
+	Write-Verbose "Creating Schedule..."
+	Write-Verbose "Schedule frequency/interval: $($alert.Schedule.Interval)"
+	Write-Verbose "Schedule Time Window: $( $alert.Schedule.QueryTimeSpan)"
+	try
+	{
+		$schedule = New-AzScheduledQueryRuleSchedule `
+			-FrequencyInMinutes $alert.Schedule.Interval `
+			-TimeWindowInMinutes $alert.Schedule.QueryTimeSpan `
+			-ErrorAction Stop `
+			3> $null
 
-	# Create alert action
-	Write-Verbose "Creating alerts..."
-	$actionResult = New-AzureAlert `
-		-SubscriptionId $SubscriptionId `
-		-ResourceGroup $ResourceGroup `
-		-ActionResourceGroup $ActionResourceGroup `
-		-WorkspaceName $WorkspaceName `
-		-SavedSearchId $alertGuid `
-		-ScheduleId $alertGuid `
-		-AlertId $alertGuid `
-		-ActionGroupName $ActionGroupName `
-		-ApiVersion $apiversion `
-		-Properties $alert.AlertDefinition
-	Write-Verbose "Alerts created successfully.."
+		Write-Verbose "Schedule created successfully"
+	}
+	catch
+	{
+		Write-Error "Failed to create schedule with exception: $($_.Exception.Message)"
+		Exit 1
+	}
+
+
+	Write-Verbose "Creating trigger condition..."
+	try
+	{
+		$thresholdOperator = $alert.AlertDefinition.Threshold.Operator
+		if ($thresholdOperator -eq "gt") {$thresholdOperator = "GreaterThan"}
+		elseif ($thresholdOperator -eq "lt") {$thresholdOperator = "LessThan"}
+		else {$thresholdOperator = "Equal"}
+
+		Write-Verbose "ThresholdOperator: $thresholdOperator"
+		Write-Verbose "Threshold Value: $($alert.AlertDefinition.Threshold.Value)"
+
+		$triggerCondition = New-AzScheduledQueryRuleTriggerCondition `
+			-ThresholdOperator $thresholdOperator `
+			-Threshold $alert.AlertDefinition.Threshold.Value `
+			-ErrorAction Stop `
+			3> $null
+
+		Write-Verbose "Trigger condition created successfully"
+	}
+	catch
+	{
+		Write-Error "Failed to create trigger with exception: $($_.Exception.Message)"
+		Exit 1
+	}
 	
 
+	Write-Verbose "Creating AznsActionGroup..."
+	try
+	{
+		Write-Verbose "Action Group ID: $actionGroupId"
+		Write-Verbose "Custom email subject: $($alert.AlertDefinition.AzNsNotification.CustomEmailSubject)"
+		$aznsActionGroup = New-AzScheduledQueryRuleAznsActionGroup `
+			-ActionGroup $actionGroupId `
+			-EmailSubject $alert.AlertDefinition.AzNsNotification.CustomEmailSubject `
+			-ErrorAction Stop `
+			3> $null
+
+		Write-Verbose "AznsActionGroup created successfully"
+	}
+	catch
+	{
+		Write-Error "Failed to create AznsActionGroup with exception: $($_.Exception.Message)"
+		Exit 1
+	}
+
+
+	Write-Verbose "Creating Alerting Action..."
+	try
+	{
+		$alertingAction = New-AzScheduledQueryRuleAlertingAction `
+			-AznsAction $aznsActionGroup `
+			-Severity "3" `
+			-Trigger $triggerCondition `
+			-ErrorAction Stop `
+			3> $null
+
+		Write-Verbose "Alerting Action created successfully"
+	}
+	catch
+	{
+		Write-Error "Failed to create Alerting Action with exception: $($_.Exception.Message)"
+		Exit 1
+	}
+
+
+	Write-Verbose "Creating alert..."
+	try
+	{
+		Write-Verbose "Location: $workspaceLocation"
+		Write-Verbose "Resource Group Name: $ResourceGroup"
+		Write-Verbose "Description: $($alert.AlertDefinition.Description)"
+		Write-Verbose "Alert Name: $($alert.AlertName)"
+		$newAlertResult = New-AzScheduledQueryRule `
+			-ResourceGroupName $ResourceGroup `
+			-Location $workspaceLocation `
+			-Action $alertingAction `
+			-Enabled $true `
+			-Description $alert.AlertDefinition.Description `
+			-Schedule $schedule `
+			-Source $source `
+			-Name $alert.AlertName `
+			-ErrorAction Stop `
+			3> $null
+
+		Write-Verbose "Alert created successfully.."
+	}
+	catch
+	{
+		Write-Error "Failed to create alert rule with exception: $($_.Exception.Message)"
+		Exit 1
+	}
+	
 	$alertProgressCount++
 }
 Write-Host "Alert creation complete..."
