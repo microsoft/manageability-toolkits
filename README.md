@@ -14,6 +14,11 @@
 ## Overview
 The Alert Toolkit automates the deployment of an example set of log alerts to Azure Monitor Log Analytics. The toolkit consists of configuration file containing log alert definitions and a script that deploys the alerts.
 
+**NOTE!** The Alert Toolkit now uses the new scheduledQueryRules API. If you need a copy of the toolkit that works with the old API please use the release linked below. If your workspace is using the new API you can use the latest code from the master branch. Any workspaces created before June 1st 2019 will be using the old API unless you migrated to the new API. For more information on the difference between the two APIs, please [refer here](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-log-api-switch#benefits-of-switching-to-new-azure-api).
+
+**Alert Toolkit for Legacy Log Alerts API**
+https://github.com/microsoft/manageability-toolkits/releases/tag/v1.0
+
 ##Prerequisites
 - [Azure PowerShell module installed (Az, not AzureRm) - Version 2.4.0+](https://docs.microsoft.com/en-us/powershell/azure/install-az-ps)
 - Log Analytics workspace created

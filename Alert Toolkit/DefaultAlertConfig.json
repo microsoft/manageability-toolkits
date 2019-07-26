@@ -213,7 +213,7 @@
       }
     },
     {
-      "AlertName": "SQL - Could not find filegroup in sys.filegroups.",
+      "AlertName": "SQL - Could not find filegroup in sys.filegroups",
       "AlertGuid": "2fcf8156-fcca-45d2-be45-aca07b90ae5e7",
       "Tags": [
         "SQL"

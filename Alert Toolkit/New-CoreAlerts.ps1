@@ -372,7 +372,7 @@ try
 	$workspace = Get-AzOperationalInsightsWorkspace -ErrorAction Stop | Where-Object { $_.Name -eq $WorkspaceName; }
 
 	# Convert the location derived from the workspace to a format accepted by the Azure Monitor commands
-	$workspaceLocation =  (Get-AzLocation | Where-Object DisplayName -eq $workspace.Location).Location
+	$workspaceLocation =  (Get-AzLocation | Where-Object {($_.DisplayName -eq $workspace.Location) -or ($_.Location -eq $workspace.Location)}).Location
 }
 catch
 {
