@@ -1425,7 +1425,7 @@
       "Information": true
     },
     {
-      "EventLogName": "Microsoft-Windows-NetworkProfile/Operationa",
+      "EventLogName": "Microsoft-Windows-NetworkProfile/Operational",
       "Error": true,
       "Warning": true,
       "Information": true
